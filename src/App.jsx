@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from "recharts";
 
 // ============================================================
 // НАЛАШТУВАННЯ
@@ -275,13 +275,16 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, loading }
     date: (r[0] || "").slice(5), // "05-28"
     count: parseInt(r[1]) || 0,
   }));
+  const dailyMin = dailyData.length
+    ? Math.floor(Math.min(...dailyData.map(d => d.count)) / 500) * 500
+    : 0;
 
   // Region: stacked % chart
   const regionStackData = feedsByRegion.data.map(r => {
     const hasFeed = parseInt(r[1]) || 0;
     const total   = parseInt(r[3]) || 0;
     return {
-      name: shortRegion(r[0]),
+      name: (r[0] || "").replace(" область", ""),
       "з фідом":  total > 0 ? Math.round(hasFeed / total * 100) : 0,
       "без фіду": total > 0 ? Math.round((total - hasFeed) / total * 100) : 0,
     };
@@ -290,7 +293,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, loading }
   // Region: count bar chart (only those with feeds, sorted desc)
   const regionCountData = feedsByRegion.data
     .filter(r => parseInt(r[1]) > 0)
-    .map(r => ({ name: shortRegion(r[0]), ЖК: parseInt(r[1]) || 0 }));
+    .map(r => ({ name: (r[0] || "").replace(" область", ""), ЖК: parseInt(r[1]) || 0 }));
 
   // Monthly feeds by type
   const monthData = feedsByMonth.data.map(r => ({
@@ -323,14 +326,18 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, loading }
       {/* ROW 2 — Щоденний графік квартир */}
       <Card>
         <Label>Квартири з фідів по датах</Label>
-        <div style={{ marginTop: 14, height: 220 }}>
+        <div style={{ marginTop: 14, height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dailyData} barCategoryGap="20%">
+            <BarChart data={dailyData} barCategoryGap="20%" margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
               <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={false} tickLine={false}
-                tickFormatter={v => (v / 1000).toFixed(0) + "k"} domain={["auto", "auto"]} />
+              <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false}
+                tickFormatter={v => v.toLocaleString("uk-UA")} domain={[dailyMin, "auto"]} width={60} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" fill={C.orange} radius={[3,3,0,0]} name="Квартири" />
+              <Bar dataKey="count" fill={C.orange} radius={[3,3,0,0]} name="Квартири">
+                <LabelList dataKey="count" position="top"
+                  style={{ fill: C.text, fontSize: 10, fontFamily: "'DM Mono', monospace" }}
+                  formatter={v => v.toLocaleString("uk-UA")} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -339,19 +346,24 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, loading }
       {/* ROW 3 — 100% stacked % по регіонах */}
       <Card>
         <Label>% ЖК з фідами відносно ЖК в продажу по регіонах</Label>
-        <div style={{ marginTop: 14, height: 260 }}>
+        <div style={{ marginTop: 14, height: 320 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={regionStackData} barCategoryGap="12%">
-              <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: 9, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+            <BarChart data={regionStackData} barCategoryGap="12%" margin={{ bottom: 60 }}>
+              <XAxis dataKey="name" axisLine={false} tickLine={false} interval={0}
+                tick={{ fill: C.muted, fontSize: 9, fontFamily: "'DM Mono', monospace", angle: -40, textAnchor: "end" }}
+                height={70} />
               <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false}
                 tickFormatter={v => v + "%"} domain={[0, 100]} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="з фідом"  stackId="a" fill={C.orange}  radius={[0,0,0,0]} />
-              <Bar dataKey="без фіду" stackId="a" fill="#fbbf24"   radius={[3,3,0,0]} />
+              <Bar dataKey="з фідом"  stackId="a" fill={C.orange} radius={[0,0,0,0]}>
+                <LabelList dataKey="з фідом" position="inside" style={{ fill: "#fff", fontSize: 8, fontFamily: "'DM Mono', monospace" }}
+                  formatter={v => v >= 8 ? v + "%" : ""} />
+              </Bar>
+              <Bar dataKey="без фіду" stackId="a" fill="#fbbf24" radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
+        <div style={{ display: "flex", gap: 20, marginTop: 4 }}>
           {[[C.orange,"з фідом"], ["#fbbf24","без фіду"]].map(([color, label]) => (
             <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>
               <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />{label}
@@ -363,13 +375,18 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, loading }
       {/* ROW 4 — Кількість ЖК з фідами по регіонах */}
       <Card>
         <Label>Кількість ЖК з фідами по регіонах</Label>
-        <div style={{ marginTop: 14, height: 220 }}>
+        <div style={{ marginTop: 14, height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={regionCountData} barCategoryGap="20%">
-              <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+            <BarChart data={regionCountData} barCategoryGap="20%" margin={{ top: 20, bottom: 60 }}>
+              <XAxis dataKey="name" axisLine={false} tickLine={false} interval={0}
+                tick={{ fill: C.muted, fontSize: 9, fontFamily: "'DM Mono', monospace", angle: -40, textAnchor: "end" }}
+                height={70} />
               <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="ЖК" fill={C.orange} radius={[3,3,0,0]} />
+              <Bar dataKey="ЖК" fill={C.orange} radius={[3,3,0,0]}>
+                <LabelList dataKey="ЖК" position="top"
+                  style={{ fill: C.text, fontSize: 10, fontFamily: "'DM Mono', monospace" }} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
