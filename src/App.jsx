@@ -7,9 +7,17 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recha
 const SHEET_ID = "1G40uOzR0pMyFw8BoEDChmbTEJhkyVTlrwWVKCokevgg";
 const API_KEY  = "AIzaSyD8sV0oOmWSvttjF0fzgxnUASDbSm7oyIk";
 
-const KPI_URL    = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Realbase_KPI?key=${API_KEY}`;
-const REGION_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%D0%9F%D0%BE%20%D1%80%D0%B5%D0%B3%D1%96%D0%BE%D0%BD%D0%B0%D1%85?key=${API_KEY}`;
-const HIGH_URL   = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%D0%9D%D0%B5%20%D0%BE%D0%BD%D0%BE%D0%B2%D0%BB%D0%B5%D0%BD%D1%96%20High?key=${API_KEY}`;
+const url = (sheet) =>
+  `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheet)}?key=${API_KEY}`;
+
+const KPI_URL    = url("Realbase_KPI");
+const REGION_URL = url("По регіонах");
+const HIGH_URL   = url("Не оновлені High");
+
+const FEEDS_KPI_URL       = url("Feeds_KPI");
+const FEEDS_DAILY_URL     = url("Feeds_Daily");
+const FEEDS_REGION_URL    = url("Feeds_By_Region");
+const FEEDS_MONTH_URL     = url("Feeds_By_Month");
 
 // ============================================================
 // ПАРСИНГ
@@ -33,7 +41,21 @@ const C = {
   bg: "#0d1117", surface: "#161b22", border: "#21262d",
   accent: "#58a6ff", green: "#3fb950", red: "#f85149",
   yellow: "#d29922", muted: "#8b949e", text: "#e6edf3",
+  orange: "#f97316",
 };
+
+// ============================================================
+// ХЕЛПЕРИ
+// ============================================================
+const UA_MONTHS = ["Січ","Лют","Бер","Квіт","Трав","Черв","Лип","Серп","Вер","Жовт","Лист","Груд"];
+function formatMonth(ym) {
+  if (!ym) return ym;
+  const [y, m] = ym.split("-");
+  return `${UA_MONTHS[(parseInt(m) || 1) - 1]} ${y}`;
+}
+function shortRegion(name) {
+  return (name || "").replace(/ська$|зька$|цька$|ська область$/, "");
+}
 
 // ============================================================
 // UI
@@ -79,7 +101,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   return (
     <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, fontFamily: "'DM Mono', monospace" }}>
       <div style={{ color: C.muted, marginBottom: 4 }}>{label}</div>
-      {payload.map((p, i) => <div key={i} style={{ color: p.fill }}>{p.name}: <strong>{p.value}</strong></div>)}
+      {payload.map((p, i) => <div key={i} style={{ color: p.fill || p.color }}>{p.name}: <strong>{p.value}</strong></div>)}
     </div>
   );
 };
@@ -87,10 +109,10 @@ const CustomTooltip = ({ active, payload, label }) => {
 // ============================================================
 // ВКЛАДКА FLATS
 // ============================================================
-function FlatsTab({ kpi, regions, highList, onRefresh, loading }) {
+function FlatsTab({ kpi, regions, highList }) {
   const n = v => parseInt(kpi[v]) || 0;
   const regionChart = regions.data.slice(0, 8).map(r => ({
-    name: (r[0] || "").replace(/ська$/, "").replace(/зька$/, "").replace(/ська$/, ""),
+    name: (r[0] || "").replace(/ська$/, "").replace(/зька$/, ""),
     Всього: parseInt(r[1]) || 0,
     Оновлено: parseInt(r[2]) || 0,
     High: parseInt(r[4]) || 0,
@@ -237,18 +259,165 @@ function FlatsTab({ kpi, regions, highList, onRefresh, loading }) {
 }
 
 // ============================================================
-// ЗАГЛУШКА ДЛЯ LAYOUTS / RINGOSTAT
+// ВКЛАДКА ФІДИ
+// ============================================================
+function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, loading }) {
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 13 }}>
+        завантаження…
+      </div>
+    );
+  }
+
+  // Daily chart — last 10 points for readability
+  const dailyData = feedsDaily.data.slice(-10).map(r => ({
+    date: (r[0] || "").slice(5), // "05-28"
+    count: parseInt(r[1]) || 0,
+  }));
+
+  // Region: stacked % chart
+  const regionStackData = feedsByRegion.data.map(r => {
+    const hasFeed = parseInt(r[1]) || 0;
+    const total   = parseInt(r[3]) || 0;
+    return {
+      name: shortRegion(r[0]),
+      "з фідом":  total > 0 ? Math.round(hasFeed / total * 100) : 0,
+      "без фіду": total > 0 ? Math.round((total - hasFeed) / total * 100) : 0,
+    };
+  });
+
+  // Region: count bar chart (only those with feeds, sorted desc)
+  const regionCountData = feedsByRegion.data
+    .filter(r => parseInt(r[1]) > 0)
+    .map(r => ({ name: shortRegion(r[0]), ЖК: parseInt(r[1]) || 0 }));
+
+  // Monthly feeds by type
+  const monthData = feedsByMonth.data.map(r => ({
+    month: formatMonth(r[0]),
+    "від забудовника": parseInt(r[1]) || 0,
+    "вручну":          parseInt(r[2]) || 0,
+  }));
+
+  const kpiCards = [
+    { key: "feeds_total",       label: "ЖК з фідами" },
+    { key: "feeds_with_prices", label: "ЖК з фідами та цінами" },
+    { key: "feeds_with_3d",     label: "ЖК з фідами та 3D" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* ROW 1 — 3 KPI картки */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        {kpiCards.map(({ key, label }) => (
+          <Card key={key}>
+            <Label>{label}</Label>
+            <div style={{ fontSize: 52, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.orange, lineHeight: 1 }}>
+              {feedsKpi[key] || 0}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* ROW 2 — Щоденний графік квартир */}
+      <Card>
+        <Label>Квартири з фідів по датах</Label>
+        <div style={{ marginTop: 14, height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dailyData} barCategoryGap="20%">
+              <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={false} tickLine={false}
+                tickFormatter={v => (v / 1000).toFixed(0) + "k"} domain={["auto", "auto"]} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="count" fill={C.orange} radius={[3,3,0,0]} name="Квартири" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* ROW 3 — 100% stacked % по регіонах */}
+      <Card>
+        <Label>% ЖК з фідами відносно ЖК в продажу по регіонах</Label>
+        <div style={{ marginTop: 14, height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={regionStackData} barCategoryGap="12%">
+              <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: 9, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false}
+                tickFormatter={v => v + "%"} domain={[0, 100]} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="з фідом"  stackId="a" fill={C.orange}  radius={[0,0,0,0]} />
+              <Bar dataKey="без фіду" stackId="a" fill="#fbbf24"   radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
+          {[[C.orange,"з фідом"], ["#fbbf24","без фіду"]].map(([color, label]) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />{label}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* ROW 4 — Кількість ЖК з фідами по регіонах */}
+      <Card>
+        <Label>Кількість ЖК з фідами по регіонах</Label>
+        <div style={{ marginTop: 14, height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={regionCountData} barCategoryGap="20%">
+              <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="ЖК" fill={C.orange} radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* ROW 5 — Фіди по типу додавання (2 графіки поруч) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Card>
+          <Label>Додано фідів від забудовників</Label>
+          <div style={{ marginTop: 14, height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthData} barCategoryGap="25%">
+                <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="від забудовника" fill={C.orange} radius={[3,3,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+        <Card>
+          <Label>Додано фідів вручну (таблички)</Label>
+          <div style={{ marginTop: 14, height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthData} barCategoryGap="25%">
+                <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="вручну" fill={C.orange} radius={[3,3,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ЗАГЛУШКА
 // ============================================================
 function ComingSoon({ name }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 16 }}>
       <div style={{ fontSize: 48, opacity: 0.2 }}>⚙</div>
-      <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800, color: C.muted }}>
-        {name}
-      </div>
+      <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800, color: C.muted }}>{name}</div>
       <div style={{ fontSize: 14, color: C.muted, fontFamily: "'DM Mono', monospace", textAlign: "center", maxWidth: 320, lineHeight: 1.8 }}>
-        Розділ у розробці.<br />
-        Підключимо коли будуть дані з Google Sheets.
+        Розділ у розробці.<br />Підключимо коли будуть дані з Google Sheets.
       </div>
       <div style={{ marginTop: 8, padding: "8px 20px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, color: C.muted, fontFamily: "'DM Mono', monospace" }}>
         coming soon
@@ -260,16 +429,27 @@ function ComingSoon({ name }) {
 // ============================================================
 // ГОЛОВНИЙ КОМПОНЕНТ
 // ============================================================
-const TABS = ["Flats", "Layouts", "Ringostat"];
+const TABS = ["Flats", "Фіди", "Layouts", "Ringostat"];
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("Flats");
-  const [kpi, setKpi]             = useState({});
-  const [regions, setRegions]     = useState({ headers: [], data: [] });
-  const [highList, setHigh]       = useState({ headers: [], data: [] });
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(null);
-  const [lastUpd, setLastUpd]     = useState(null);
+
+  // Flats data
+  const [kpi, setKpi]         = useState({});
+  const [regions, setRegions] = useState({ headers: [], data: [] });
+  const [highList, setHigh]   = useState({ headers: [], data: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [lastUpd, setLastUpd] = useState(null);
+
+  // Feeds data
+  const [feedsKpi, setFeedsKpi]             = useState({});
+  const [feedsDaily, setFeedsDaily]         = useState({ headers: [], data: [] });
+  const [feedsByRegion, setFeedsByRegion]   = useState({ headers: [], data: [] });
+  const [feedsByMonth, setFeedsByMonth]     = useState({ headers: [], data: [] });
+  const [feedsLoaded, setFeedsLoaded]       = useState(false);
+  const [feedsLoading, setFeedsLoading]     = useState(false);
+  const [feedsError, setFeedsError]         = useState(null);
 
   const isDemo = API_KEY.includes("ВСТАВТЕ");
 
@@ -285,15 +465,38 @@ export default function Dashboard() {
       setRegions(parseTable(j2.values));
       setHigh(parseTable(j3.values));
       if (parsed.last_updated) setLastUpd(new Date(parsed.last_updated));
-    } catch (e) {
+    } catch {
       setError("Не вдалося завантажити дані.");
     } finally {
       setLoading(false);
     }
   }, [isDemo]);
 
+  const fetchFeedsData = useCallback(async () => {
+    if (isDemo) return;
+    setFeedsLoading(true);
+    setFeedsError(null);
+    try {
+      const [r1, r2, r3, r4] = await Promise.all([
+        fetch(FEEDS_KPI_URL), fetch(FEEDS_DAILY_URL),
+        fetch(FEEDS_REGION_URL), fetch(FEEDS_MONTH_URL),
+      ]);
+      const [j1, j2, j3, j4] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json()]);
+      setFeedsKpi(parseKPI(j1.values));
+      setFeedsDaily(parseTable(j2.values));
+      setFeedsByRegion(parseTable(j3.values));
+      setFeedsByMonth(parseTable(j4.values));
+      setFeedsLoaded(true);
+    } catch {
+      setFeedsError("Не вдалося завантажити дані фідів.");
+    } finally {
+      setFeedsLoading(false);
+    }
+  }, [isDemo]);
+
   useEffect(() => {
     if (!isDemo) { fetchData(); return; }
+    // Demo дані для Flats
     setKpi({
       period: "травень 2026 р.", active_total: "163", updated_this_month: "89",
       pct_updated_all: "55", high_total: "34", high_updated: "28",
@@ -325,6 +528,13 @@ export default function Dashboard() {
     setLoading(false);
   }, [isDemo, fetchData]);
 
+  // Lazy load feeds when tab is first opened
+  useEffect(() => {
+    if (activeTab === "Фіди" && !feedsLoaded && !isDemo) {
+      fetchFeedsData();
+    }
+  }, [activeTab, feedsLoaded, isDemo, fetchFeedsData]);
+
   return (
     <div style={{ background: C.bg, minHeight: "100vh", color: C.text, fontFamily: "'DM Sans', sans-serif", paddingBottom: 48 }}>
       <style>{`
@@ -337,7 +547,6 @@ export default function Dashboard() {
       {/* Шапка */}
       <div style={{ borderBottom: `1px solid ${C.border}`, padding: "0 36px", display: "flex", alignItems: "stretch", justifyContent: "space-between", position: "sticky", top: 0, background: C.bg, zIndex: 10 }}>
 
-        {/* Ліво — назва + вкладки */}
         <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
           <div style={{ display: "flex", alignItems: "center", paddingRight: 32, borderRight: `1px solid ${C.border}` }}>
             <div>
@@ -351,29 +560,37 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Вкладки */}
           <div style={{ display: "flex", alignItems: "stretch", marginLeft: 8 }}>
             {TABS.map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                background: "none", border: "none", borderBottom: activeTab === tab ? `2px solid ${C.accent}` : "2px solid transparent",
+                background: "none", border: "none",
+                borderBottom: activeTab === tab ? `2px solid ${C.accent}` : "2px solid transparent",
                 color: activeTab === tab ? C.text : C.muted, fontFamily: "'DM Sans', sans-serif",
                 fontSize: 14, fontWeight: activeTab === tab ? 600 : 400,
                 padding: "18px 20px", cursor: "pointer", transition: "all 0.2s",
                 display: "flex", alignItems: "center", gap: 6,
               }}>
                 {tab}
-                {tab === "Layouts" || tab === "Ringostat" ? (
+                {(tab === "Layouts" || tab === "Ringostat") && (
                   <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.border, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em" }}>
                     soon
                   </span>
-                ) : null}
+                )}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Право — кнопка */}
-        <div style={{ display: "flex", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {activeTab === "Фіди" && feedsLoaded && (
+            <button onClick={fetchFeedsData} disabled={feedsLoading || isDemo} style={{
+              background: "none", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8,
+              padding: "8px 14px", fontSize: 13, cursor: feedsLoading || isDemo ? "not-allowed" : "pointer",
+              opacity: feedsLoading || isDemo ? 0.5 : 1, fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {feedsLoading ? "…" : "↻"}
+            </button>
+          )}
           <button onClick={fetchData} disabled={loading || isDemo} style={{
             background: C.accent, color: "#fff", border: "none", borderRadius: 8,
             padding: "8px 18px", fontSize: 13, fontWeight: 600,
@@ -385,15 +602,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {error && (
+      {(error || feedsError) && (
         <div style={{ margin: "20px 36px", padding: "12px 18px", background: "#2d1b1b", border: `1px solid ${C.red}`, borderRadius: 10, color: C.red, fontSize: 13, fontFamily: "'DM Mono', monospace" }}>
-          ⚠ {error}
+          ⚠ {error || feedsError}
         </div>
       )}
 
       {/* Контент вкладок */}
       <div style={{ padding: "24px 36px" }}>
-        {activeTab === "Flats"     && <FlatsTab kpi={kpi} regions={regions} highList={highList} onRefresh={fetchData} loading={loading} />}
+        {activeTab === "Flats"     && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
+        {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} loading={feedsLoading} />}
         {activeTab === "Layouts"   && <ComingSoon name="Layouts" />}
         {activeTab === "Ringostat" && <ComingSoon name="Ringostat" />}
       </div>
