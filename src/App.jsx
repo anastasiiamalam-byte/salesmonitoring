@@ -14,10 +14,11 @@ const KPI_URL    = url("Realbase_KPI");
 const REGION_URL = url("По регіонах");
 const HIGH_URL   = url("Не оновлені High");
 
-const FEEDS_KPI_URL       = url("Feeds_KPI");
-const FEEDS_DAILY_URL     = url("Feeds_Daily");
-const FEEDS_REGION_URL    = url("Feeds_By_Region");
-const FEEDS_MONTH_URL     = url("Feeds_By_Month");
+const FEEDS_KPI_URL          = url("Feeds_KPI");
+const FEEDS_DAILY_URL        = url("Feeds_Daily");
+const FEEDS_REGION_URL       = url("Feeds_By_Region");
+const FEEDS_MONTH_URL        = url("Feeds_By_Month");
+const FEEDS_REGION_STATS_URL = url("Feeds_Region_Stats");
 
 // ============================================================
 // ПАРСИНГ
@@ -261,7 +262,7 @@ function FlatsTab({ kpi, regions, highList }) {
 // ============================================================
 // ВКЛАДКА ФІДИ
 // ============================================================
-function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, loading }) {
+function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegionStats, loading }) {
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 13 }}>
@@ -393,7 +394,49 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, loading }
         </Card>
       </div>
 
-      {/* ROW 4 — По місяцях */}
+      {/* ROW 4 — Таблиця статистики квартир по регіонах */}
+      {feedsRegionStats.data.length > 0 && (
+        <Card>
+          <Label>Статистика квартир по регіонах</Label>
+          <div style={{ marginTop: 12, overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  {["Регіон", "Available у фідах", "Всього в ЖК з фідами", "Всього в продажу", "% покриття"].map(h => (
+                    <th key={h} style={{ textAlign: h === "Регіон" ? "left" : "right", padding: "6px 12px", color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {feedsRegionStats.data.map((row, i) => {
+                  const available = parseInt(row[1]) || 0;
+                  const total     = parseInt(row[3]) || 0;
+                  const pct       = total > 0 ? Math.round(available / total * 100) : 0;
+                  const pctCol    = pct >= 50 ? C.green : pct >= 25 ? C.yellow : pct > 0 ? C.orange : C.muted;
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: "9px 12px", fontWeight: 600, color: C.text }}>{row[0]}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.orange }}>{(parseInt(row[1]) || 0).toLocaleString("uk-UA")}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.text }}>{(parseInt(row[2]) || 0).toLocaleString("uk-UA")}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.text }}>{(parseInt(row[3]) || 0).toLocaleString("uk-UA")}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                          <div style={{ width: 60, height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
+                            <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: pctCol, borderRadius: 2 }} />
+                          </div>
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: pctCol, fontWeight: 600, minWidth: 36, textAlign: "right" }}>{pct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ROW 5 — По місяцях */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Card>
           <Label>Додано фідів від забудовників</Label>
@@ -465,13 +508,14 @@ export default function Dashboard() {
   const [lastUpd, setLastUpd] = useState(null);
 
   // Feeds data
-  const [feedsKpi, setFeedsKpi]             = useState({});
-  const [feedsDaily, setFeedsDaily]         = useState({ headers: [], data: [] });
-  const [feedsByRegion, setFeedsByRegion]   = useState({ headers: [], data: [] });
-  const [feedsByMonth, setFeedsByMonth]     = useState({ headers: [], data: [] });
-  const [feedsLoaded, setFeedsLoaded]       = useState(false);
-  const [feedsLoading, setFeedsLoading]     = useState(false);
-  const [feedsError, setFeedsError]         = useState(null);
+  const [feedsKpi, setFeedsKpi]                   = useState({});
+  const [feedsDaily, setFeedsDaily]               = useState({ headers: [], data: [] });
+  const [feedsByRegion, setFeedsByRegion]         = useState({ headers: [], data: [] });
+  const [feedsByMonth, setFeedsByMonth]           = useState({ headers: [], data: [] });
+  const [feedsRegionStats, setFeedsRegionStats]   = useState({ headers: [], data: [] });
+  const [feedsLoaded, setFeedsLoaded]             = useState(false);
+  const [feedsLoading, setFeedsLoading]           = useState(false);
+  const [feedsError, setFeedsError]               = useState(null);
 
   const isDemo = API_KEY.includes("ВСТАВТЕ");
 
@@ -499,15 +543,17 @@ export default function Dashboard() {
     setFeedsLoading(true);
     setFeedsError(null);
     try {
-      const [r1, r2, r3, r4] = await Promise.all([
+      const [r1, r2, r3, r4, r5] = await Promise.all([
         fetch(FEEDS_KPI_URL), fetch(FEEDS_DAILY_URL),
         fetch(FEEDS_REGION_URL), fetch(FEEDS_MONTH_URL),
+        fetch(FEEDS_REGION_STATS_URL),
       ]);
-      const [j1, j2, j3, j4] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json()]);
+      const [j1, j2, j3, j4, j5] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json(), r5.json()]);
       setFeedsKpi(parseKPI(j1.values));
       setFeedsDaily(parseTable(j2.values));
       setFeedsByRegion(parseTable(j3.values));
       setFeedsByMonth(parseTable(j4.values));
+      setFeedsRegionStats(parseTable(j5.values));
       setFeedsLoaded(true);
     } catch {
       setFeedsError("Не вдалося завантажити дані фідів.");
@@ -633,7 +679,7 @@ export default function Dashboard() {
       {/* Контент вкладок */}
       <div style={{ padding: "24px 36px" }}>
         {activeTab === "Flats"     && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
-        {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} loading={feedsLoading} />}
+        {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} loading={feedsLoading} />}
         {activeTab === "Layouts"   && <ComingSoon name="Layouts" />}
         {activeTab === "Ringostat" && <ComingSoon name="Ringostat" />}
       </div>
