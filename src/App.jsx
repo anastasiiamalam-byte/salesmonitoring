@@ -402,31 +402,38 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr>
-                  {["Регіон", "Available у фідах", "Всього в ЖК з фідами", "Всього в продажу", "% покриття"].map(h => (
-                    <th key={h} style={{ textAlign: h === "Регіон" ? "left" : "right", padding: "6px 12px", color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
+                  {["Регіон", "Available у фідах", "Всього в ЖК з фідами", "Всього в продажу", "% в ЖК з фідами", "% available у фідах"].map(h => (
+                    <th key={h} style={{ textAlign: h === "Регіон" ? "left" : "right", padding: "6px 12px", color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {feedsRegionStats.data.map((row, i) => {
-                  const available = parseInt(row[1]) || 0;
-                  const total     = parseInt(row[3]) || 0;
-                  const pct       = total > 0 ? Math.round(available / total * 100) : 0;
-                  const pctCol    = pct >= 50 ? C.green : pct >= 25 ? C.yellow : pct > 0 ? C.orange : C.muted;
+                  const available  = parseInt(row[1]) || 0;
+                  const withFeeds  = parseInt(row[2]) || 0;
+                  const forSale    = parseInt(row[3]) || 0;
+                  const pctInFeeds = forSale   > 0 ? (withFeeds / forSale   * 100).toFixed(1) : "0.0";
+                  const pctAvail   = withFeeds > 0 ? (available / withFeeds * 100).toFixed(1) : "0.0";
+                  const pctInFeedsColor = parseFloat(pctInFeeds) >= 50 ? C.green : parseFloat(pctInFeeds) >= 25 ? C.yellow : parseFloat(pctInFeeds) > 0 ? C.orange : C.muted;
+                  const pctAvailColor   = parseFloat(pctAvail)   >= 50 ? C.green : parseFloat(pctAvail)   >= 25 ? C.yellow : parseFloat(pctAvail)   > 0 ? C.orange : C.muted;
+                  const pctCell = (val, color) => (
+                    <td style={{ padding: "9px 12px", textAlign: "right" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                        <div style={{ width: 50, height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{ width: `${Math.min(100, parseFloat(val))}%`, height: "100%", background: color, borderRadius: 2 }} />
+                        </div>
+                        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color, fontWeight: 600, minWidth: 38, textAlign: "right" }}>{val}%</span>
+                      </div>
+                    </td>
+                  );
                   return (
                     <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
                       <td style={{ padding: "9px 12px", fontWeight: 600, color: C.text }}>{row[0]}</td>
-                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.orange }}>{(parseInt(row[1]) || 0).toLocaleString("uk-UA")}</td>
-                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.text }}>{(parseInt(row[2]) || 0).toLocaleString("uk-UA")}</td>
-                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.text }}>{(parseInt(row[3]) || 0).toLocaleString("uk-UA")}</td>
-                      <td style={{ padding: "9px 12px", textAlign: "right" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-                          <div style={{ width: 60, height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
-                            <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: pctCol, borderRadius: 2 }} />
-                          </div>
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: pctCol, fontWeight: 600, minWidth: 36, textAlign: "right" }}>{pct}%</span>
-                        </div>
-                      </td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.orange }}>{available.toLocaleString("uk-UA")}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.text }}>{withFeeds.toLocaleString("uk-UA")}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.text }}>{forSale.toLocaleString("uk-UA")}</td>
+                      {pctCell(pctInFeeds, pctInFeedsColor)}
+                      {pctCell(pctAvail,   pctAvailColor)}
                     </tr>
                   );
                 })}
