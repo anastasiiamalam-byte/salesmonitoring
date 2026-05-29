@@ -262,7 +262,30 @@ function FlatsTab({ kpi, regions, highList }) {
 // ============================================================
 // ВКЛАДКА ФІДИ
 // ============================================================
+// Кнопки фільтра
+function FilterPills({ options, value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      {options.map(o => (
+        <button key={o.value} onClick={() => onChange(o.value)} style={{
+          background: value === o.value ? C.accent : C.border,
+          color: value === o.value ? "#fff" : C.muted,
+          border: "none", borderRadius: 6, padding: "4px 12px",
+          fontSize: 11, fontFamily: "'DM Mono', monospace",
+          cursor: "pointer", fontWeight: value === o.value ? 600 : 400,
+          transition: "all 0.15s",
+        }}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegionStats, loading }) {
+  const [dailyDays,   setDailyDays]   = useState(30);
+  const [monthsCount, setMonthsCount] = useState(6);
+
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 13 }}>
@@ -271,7 +294,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
     );
   }
 
-  const dailyData = feedsDaily.data.slice(-10).map(r => ({
+  const dailyData = feedsDaily.data.slice(-dailyDays).map(r => ({
     date: (r[0] || "").slice(5),
     count: parseInt(r[1]) || 0,
   }));
@@ -295,7 +318,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
     .slice(0, 15);
   const maxCount = regionCountDataH[0]?.count || 1;
 
-  const monthData = feedsByMonth.data.map(r => ({
+  const monthData = feedsByMonth.data.slice(-monthsCount).map(r => ({
     month: formatMonth(r[0]),
     "від забудовника": parseInt(r[1]) || 0,
     "вручну": parseInt(r[2]) || 0,
@@ -324,8 +347,20 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
 
       {/* ROW 2 — Щоденний графік */}
       <Card>
-        <Label>Квартири з фідів по датах</Label>
-        <div style={{ marginTop: 14, height: 250 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <Label style={{ marginBottom: 0 }}>Квартири з фідів по датах</Label>
+          <FilterPills
+            value={dailyDays}
+            onChange={setDailyDays}
+            options={[
+              { label: "7д",  value: 7  },
+              { label: "14д", value: 14 },
+              { label: "30д", value: 30 },
+              { label: "90д", value: 90 },
+            ]}
+          />
+        </div>
+        <div style={{ height: 250 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dailyData} barCategoryGap="22%" margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
               <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
@@ -444,6 +479,20 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
       )}
 
       {/* ROW 5 — По місяцях */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, fontFamily: "'DM Mono', monospace" }}>
+          Фіди по типу додавання
+        </div>
+        <FilterPills
+          value={monthsCount}
+          onChange={setMonthsCount}
+          options={[
+            { label: "3 міс",  value: 3  },
+            { label: "6 міс",  value: 6  },
+            { label: "12 міс", value: 12 },
+          ]}
+        />
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Card>
           <Label>Додано фідів від забудовників</Label>
