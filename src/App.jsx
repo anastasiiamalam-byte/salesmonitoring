@@ -326,6 +326,15 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
 
   const pctColor = pct => pct >= 25 ? C.orange : pct >= 10 ? C.yellow : C.muted;
 
+  // Aggregate stats
+  const totalBuildings      = feedsByRegion.data.reduce((s, r) => s + (parseInt(r[3]) || 0), 0);
+  const pctBuildsWithFeeds  = totalBuildings > 0 ? Math.round((parseInt(feedsKpi.feeds_total) || 0) / totalBuildings * 100) : 0;
+  const totalAvailInFeeds   = feedsRegionStats.data.reduce((s, r) => s + (parseInt(r[1]) || 0), 0);
+  const totalFlatsWithFeeds = feedsRegionStats.data.reduce((s, r) => s + (parseInt(r[2]) || 0), 0);
+  const totalFlatsForSale   = feedsRegionStats.data.reduce((s, r) => s + (parseInt(r[3]) || 0), 0);
+  const pctFlatsInFeeds     = totalFlatsForSale   > 0 ? Math.round(totalFlatsWithFeeds / totalFlatsForSale   * 100) : 0;
+  const pctAvailInFeeds     = totalFlatsWithFeeds > 0 ? Math.round(totalAvailInFeeds   / totalFlatsWithFeeds * 100) : 0;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
@@ -343,6 +352,71 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
             </div>
           </Card>
         ))}
+      </div>
+
+      {/* ROW 1.5 — % загальні */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        <Card>
+          <Label>% ЖК з фідами</Label>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
+            <PctRing value={pctBuildsWithFeeds} color={C.orange} />
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: C.orange }}>
+                {feedsKpi.feeds_total || 0}<span style={{ fontSize: 13, color: C.muted, fontWeight: 400 }}>/{totalBuildings}</span>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>ЖК у продажу та бронь</div>
+            </div>
+          </div>
+        </Card>
+        <Card>
+          <Label>% квартир в ЖК з фідами</Label>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
+            <PctRing value={pctFlatsInFeeds} color={C.accent} />
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: C.accent }}>
+                {totalFlatsWithFeeds.toLocaleString("uk-UA")}<span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>/{totalFlatsForSale.toLocaleString("uk-UA")}</span>
+              </div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>% з повною наявністю (продані + у продажі + бронь)</div>
+            </div>
+          </div>
+        </Card>
+        <Card>
+          <Label>% available квартир у фідах</Label>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
+            <PctRing value={pctAvailInFeeds} color={C.green} />
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: C.green }}>
+                {totalAvailInFeeds.toLocaleString("uk-UA")}<span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>/{totalFlatsWithFeeds.toLocaleString("uk-UA")}</span>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>у продажі / всього в ЖК з фідами</div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ROW 1.6 — Кількості */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        <Card>
+          <Label>Квартир в продажу всього</Label>
+          <div style={{ fontSize: 46, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.text, lineHeight: 1 }}>
+            {totalFlatsForSale.toLocaleString("uk-UA")}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>по ЖК у продажу та бронь</div>
+        </Card>
+        <Card>
+          <Label>Квартир в ЖК з фідами</Label>
+          <div style={{ fontSize: 46, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.orange, lineHeight: 1 }}>
+            {totalFlatsWithFeeds.toLocaleString("uk-UA")}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>продані + у продажі + бронь</div>
+        </Card>
+        <Card>
+          <Label>Available квартир у фідах</Label>
+          <div style={{ fontSize: 46, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.green, lineHeight: 1 }}>
+            {totalAvailInFeeds.toLocaleString("uk-UA")}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>від компанії-розробника фіда</div>
+        </Card>
       </div>
 
       {/* ROW 2 — Щоденний графік */}
@@ -550,10 +624,10 @@ function ComingSoon({ name }) {
 // ============================================================
 // ГОЛОВНИЙ КОМПОНЕНТ
 // ============================================================
-const TABS = ["Flats", "Фіди", "Layouts", "Ringostat"];
+const TABS = ["Фіди", "Realbase", "Layouts", "Ringostat"];
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState("Flats");
+  const [activeTab, setActiveTab] = useState("Фіди");
 
   // Flats data
   const [kpi, setKpi]         = useState({});
@@ -734,7 +808,7 @@ export default function Dashboard() {
 
       {/* Контент вкладок */}
       <div style={{ padding: "24px 36px" }}>
-        {activeTab === "Flats"     && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
+        {activeTab === "Realbase"  && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
         {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} loading={feedsLoading} />}
         {activeTab === "Layouts"   && <ComingSoon name="Layouts" />}
         {activeTab === "Ringostat" && <ComingSoon name="Ringostat" />}
