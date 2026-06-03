@@ -19,6 +19,7 @@ const FEEDS_DAILY_URL        = url("Feeds_Daily");
 const FEEDS_REGION_URL       = url("Feeds_By_Region");
 const FEEDS_MONTH_URL        = url("Feeds_By_Month");
 const FEEDS_REGION_STATS_URL = url("Feeds_Region_Stats");
+const FEEDS_COMPANY_URL      = url("Feeds_By_Company");
 
 // ============================================================
 // ПАРСИНГ
@@ -282,7 +283,7 @@ function FilterPills({ options, value, onChange }) {
   );
 }
 
-function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegionStats, loading }) {
+function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegionStats, feedsByCompany, loading }) {
   const [dailyDays,   setDailyDays]   = useState(30);
   const [monthsCount, setMonthsCount] = useState(6);
 
@@ -415,7 +416,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
           <div style={{ fontSize: 46, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.green, lineHeight: 1 }}>
             {totalAvailInFeeds.toLocaleString("uk-UA")}
           </div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>від компанії-розробника фіда</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>квартири у продажі у фідах</div>
         </Card>
       </div>
 
@@ -599,6 +600,51 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
           </div>
         </Card>
       </div>
+
+      {/* ROW 6 — Компанії-розробники фідів */}
+      {feedsByCompany.data.length > 0 && (() => {
+        const companyData = feedsByCompany.data.map(r => ({
+          company: r[0] || "—",
+          count: parseInt(r[1]) || 0,
+        }));
+        const maxVal = companyData[0]?.count || 1;
+        const totalCompany = companyData.reduce((s, r) => s + r.count, 0);
+        const COMPANY_COLORS = ["#58a6ff","#f97316","#3fb950","#d29922","#bc8cff","#ff7b72","#39d353","#79c0ff"];
+        return (
+          <Card>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <Label style={{ marginBottom: 0 }}>Компанії-розробники фідів</Label>
+              <div style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: C.muted }}>
+                всього фідів: <span style={{ color: C.text, fontWeight: 700 }}>{totalCompany}</span> · увімкнені
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 32px" }}>
+              {companyData.map((r, i) => {
+                const color = COMPANY_COLORS[i % COMPANY_COLORS.length];
+                const pct = Math.round(r.count / maxVal * 100);
+                const pctOfTotal = Math.round(r.count / totalCompany * 100);
+                return (
+                  <div key={r.company} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                    <div style={{ width: 90, fontSize: 13, fontWeight: 600, color: C.text, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {r.company}
+                    </div>
+                    <div style={{ flex: 1, height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width 0.8s ease" }} />
+                    </div>
+                    <div style={{ width: 32, fontSize: 12, fontFamily: "'DM Mono', monospace", color, fontWeight: 700, textAlign: "right", flexShrink: 0 }}>
+                      {r.count}
+                    </div>
+                    <div style={{ width: 34, fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, textAlign: "right", flexShrink: 0 }}>
+                      {pctOfTotal}%
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })()}
     </div>
   );
 }
@@ -643,6 +689,7 @@ export default function Dashboard() {
   const [feedsByRegion, setFeedsByRegion]         = useState({ headers: [], data: [] });
   const [feedsByMonth, setFeedsByMonth]           = useState({ headers: [], data: [] });
   const [feedsRegionStats, setFeedsRegionStats]   = useState({ headers: [], data: [] });
+  const [feedsByCompany, setFeedsByCompany]       = useState({ headers: [], data: [] });
   const [feedsLoaded, setFeedsLoaded]             = useState(false);
   const [feedsLoading, setFeedsLoading]           = useState(false);
   const [feedsError, setFeedsError]               = useState(null);
@@ -673,17 +720,18 @@ export default function Dashboard() {
     setFeedsLoading(true);
     setFeedsError(null);
     try {
-      const [r1, r2, r3, r4, r5] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6] = await Promise.all([
         fetch(FEEDS_KPI_URL), fetch(FEEDS_DAILY_URL),
         fetch(FEEDS_REGION_URL), fetch(FEEDS_MONTH_URL),
-        fetch(FEEDS_REGION_STATS_URL),
+        fetch(FEEDS_REGION_STATS_URL), fetch(FEEDS_COMPANY_URL),
       ]);
-      const [j1, j2, j3, j4, j5] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json(), r5.json()]);
+      const [j1, j2, j3, j4, j5, j6] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json(), r5.json(), r6.json()]);
       setFeedsKpi(parseKPI(j1.values));
       setFeedsDaily(parseTable(j2.values));
       setFeedsByRegion(parseTable(j3.values));
       setFeedsByMonth(parseTable(j4.values));
       setFeedsRegionStats(parseTable(j5.values));
+      setFeedsByCompany(parseTable(j6.values));
       setFeedsLoaded(true);
     } catch {
       setFeedsError("Не вдалося завантажити дані фідів.");
@@ -809,7 +857,7 @@ export default function Dashboard() {
       {/* Контент вкладок */}
       <div style={{ padding: "24px 36px" }}>
         {activeTab === "Realbase"  && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
-        {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} loading={feedsLoading} />}
+        {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} feedsByCompany={feedsByCompany} loading={feedsLoading} />}
         {activeTab === "Layouts"   && <ComingSoon name="Layouts" />}
         {activeTab === "Ringostat" && <ComingSoon name="Ringostat" />}
       </div>
