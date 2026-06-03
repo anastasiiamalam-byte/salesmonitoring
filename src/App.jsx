@@ -127,7 +127,7 @@ function FlatsTab({ kpi, regions, highList }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
         <Card>
           <Label>Активних ЖК</Label>
-          <div style={{ fontSize: 52, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.text, lineHeight: 1 }}>
+          <div style={{ fontSize: 56, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.text, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
             {n("active_total")}
           </div>
           <div style={{ marginTop: 10, fontSize: 12, color: C.muted, fontFamily: "'DM Mono', monospace" }}>{kpi.period || ""}</div>
@@ -144,7 +144,7 @@ function FlatsTab({ kpi, regions, highList }) {
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
               <PctRing value={n(item.key)} color={item.color} />
               <div>
-                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: item.color }}>
+                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: item.color, fontVariantNumeric: "tabular-nums" }}>
                   {n(item.num)}<span style={{ fontSize: 13, color: C.muted, fontWeight: 400 }}>/{n(item.total)}</span>
                 </div>
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{item.sub}</div>
@@ -339,85 +339,64 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* ROW 1 — KPI */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+      {/* ROW 1 — 3 великих KPI + 3 метрики з кільцями в одному рядку */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
         {[
-          { key: "feeds_total",       label: "ЖК з фідами" },
-          { key: "feeds_with_prices", label: "ЖК з фідами та цінами" },
-          { key: "feeds_with_3d",     label: "ЖК з фідами та 3D" },
-        ].map(({ key, label }) => (
-          <Card key={key}>
+          { key: "feeds_total",       label: "ЖК з фідами",          sub: "увімкнений фід" },
+          { key: "feeds_with_prices", label: "ЖК з фідами та цінами", sub: "ціни з фіду" },
+          { key: "feeds_with_3d",     label: "ЖК з 3D турами",        sub: "has_vr = 1" },
+        ].map(({ key, label, sub }) => (
+          <Card key={key} style={{ padding: "22px 26px" }}>
             <Label>{label}</Label>
-            <div style={{ fontSize: 56, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.orange, lineHeight: 1 }}>
+            <div style={{ fontSize: 62, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.orange, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
               {feedsKpi[key] || 0}
             </div>
+            <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>{sub}</div>
           </Card>
         ))}
       </div>
 
-      {/* ROW 1.5 — % загальні */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-        <Card>
-          <Label>% ЖК з фідами</Label>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
-            <PctRing value={pctBuildsWithFeeds} color={C.orange} />
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: C.orange }}>
-                {feedsKpi.feeds_total || 0}<span style={{ fontSize: 13, color: C.muted, fontWeight: 400 }}>/{totalBuildings}</span>
+      {/* ROW 1.5 — Метрики: % + абсолютне число разом */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
+        {[
+          {
+            label: "% ЖК з фідами",
+            pct: pctBuildsWithFeeds, color: C.orange,
+            num: feedsKpi.feeds_total || 0, total: totalBuildings,
+            numLabel: "ЖК з фідами",
+            sub: `із ${totalBuildings.toLocaleString("uk-UA")} ЖК у продажу та бронь`,
+          },
+          {
+            label: "% квартир в ЖК з фідами",
+            pct: pctFlatsInFeeds, color: C.accent,
+            num: totalFlatsWithFeeds, total: totalFlatsForSale,
+            numLabel: "квартир в ЖК з фідами",
+            sub: "продані + у продажі + бронь",
+          },
+          {
+            label: "% available у фідах",
+            pct: pctAvailInFeeds, color: C.green,
+            num: totalAvailInFeeds, total: totalFlatsWithFeeds,
+            numLabel: "available у фідах",
+            sub: "квартири у продажі / всього в ЖК з фідами",
+          },
+        ].map(({ label, pct, color, num, total, sub }) => (
+          <Card key={label} style={{ padding: "22px 26px" }}>
+            <Label>{label}</Label>
+            <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6 }}>
+              <PctRing value={pct} color={color} size={88} />
+              <div>
+                <div style={{ fontSize: 38, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+                  {num.toLocaleString("uk-UA")}
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, fontFamily: "'DM Mono', monospace", marginTop: 5 }}>
+                  із {total.toLocaleString("uk-UA")}
+                </div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 3, maxWidth: 160, lineHeight: 1.4 }}>{sub}</div>
               </div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>ЖК у продажу та бронь</div>
             </div>
-          </div>
-        </Card>
-        <Card>
-          <Label>% квартир в ЖК з фідами</Label>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
-            <PctRing value={pctFlatsInFeeds} color={C.accent} />
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: C.accent }}>
-                {totalFlatsWithFeeds.toLocaleString("uk-UA")}<span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>/{totalFlatsForSale.toLocaleString("uk-UA")}</span>
-              </div>
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>% з повною наявністю (продані + у продажі + бронь)</div>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <Label>% available квартир у фідах</Label>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
-            <PctRing value={pctAvailInFeeds} color={C.green} />
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: C.green }}>
-                {totalAvailInFeeds.toLocaleString("uk-UA")}<span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>/{totalFlatsWithFeeds.toLocaleString("uk-UA")}</span>
-              </div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>у продажі / всього в ЖК з фідами</div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* ROW 1.6 — Кількості */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-        <Card>
-          <Label>Квартир в продажу всього</Label>
-          <div style={{ fontSize: 46, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.text, lineHeight: 1 }}>
-            {totalFlatsForSale.toLocaleString("uk-UA")}
-          </div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>по ЖК у продажу та бронь</div>
-        </Card>
-        <Card>
-          <Label>Квартир в ЖК з фідами</Label>
-          <div style={{ fontSize: 46, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.orange, lineHeight: 1 }}>
-            {totalFlatsWithFeeds.toLocaleString("uk-UA")}
-          </div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>продані + у продажі + бронь</div>
-        </Card>
-        <Card>
-          <Label>Available квартир у фідах</Label>
-          <div style={{ fontSize: 46, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: C.green, lineHeight: 1 }}>
-            {totalAvailInFeeds.toLocaleString("uk-UA")}
-          </div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>квартири у продажі у фідах</div>
-        </Card>
+          </Card>
+        ))}
       </div>
 
       {/* ROW 2 — Щоденний графік */}
@@ -784,14 +763,23 @@ export default function Dashboard() {
   return (
     <div style={{ background: C.bg, minHeight: "100vh", color: C.text, fontFamily: "'DM Sans', sans-serif", paddingBottom: 48 }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         .fade { animation: fadeUp 0.45s ease both; }
+        @keyframes orbFloat1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(80px,60px) scale(1.08)} }
+        @keyframes orbFloat2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-60px,-80px) scale(0.92)} }
+        @keyframes orbFloat3 { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(50px,-40px) scale(1.04)} 66%{transform:translate(-30px,50px) scale(0.97)} }
       `}</style>
+      {/* Animated background orbs */}
+      <div style={{ position:"fixed", inset:0, overflow:"hidden", pointerEvents:"none", zIndex:0 }}>
+        <div style={{ position:"absolute", width:700, height:700, borderRadius:"50%", background:"radial-gradient(circle, rgba(88,166,255,0.07) 0%, transparent 70%)", top:-200, left:-150, animation:"orbFloat1 16s ease-in-out infinite" }} />
+        <div style={{ position:"absolute", width:550, height:550, borderRadius:"50%", background:"radial-gradient(circle, rgba(249,115,22,0.07) 0%, transparent 70%)", bottom:"-5%", right:"-5%", animation:"orbFloat2 20s ease-in-out infinite" }} />
+        <div style={{ position:"absolute", width:400, height:400, borderRadius:"50%", background:"radial-gradient(circle, rgba(63,185,80,0.05) 0%, transparent 70%)", top:"40%", left:"40%", animation:"orbFloat3 13s ease-in-out infinite" }} />
+      </div>
 
       {/* Шапка */}
-      <div style={{ borderBottom: `1px solid ${C.border}`, padding: "0 36px", display: "flex", alignItems: "stretch", justifyContent: "space-between", position: "sticky", top: 0, background: C.bg, zIndex: 10 }}>
+      <div style={{ borderBottom: `1px solid ${C.border}`, padding: "0 20px", display: "flex", alignItems: "stretch", justifyContent: "space-between", position: "sticky", top: 0, background: C.bg, zIndex: 10 }}>
 
         <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
           <div style={{ display: "flex", alignItems: "center", paddingRight: 32, borderRight: `1px solid ${C.border}` }}>
@@ -855,7 +843,7 @@ export default function Dashboard() {
       )}
 
       {/* Контент вкладок */}
-      <div style={{ padding: "24px 36px" }}>
+      <div style={{ padding: "20px 20px", position: "relative", zIndex: 1 }}>
         {activeTab === "Realbase"  && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
         {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} feedsByCompany={feedsByCompany} loading={feedsLoading} />}
         {activeTab === "Layouts"   && <ComingSoon name="Layouts" />}
