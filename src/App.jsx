@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, PieChart, Pie, Cell, Legend } from "recharts";
 
 // ============================================================
 // НАЛАШТУВАННЯ
@@ -20,6 +20,10 @@ const FEEDS_REGION_URL       = url("Feeds_By_Region");
 const FEEDS_MONTH_URL        = url("Feeds_By_Month");
 const FEEDS_REGION_STATS_URL = url("Feeds_Region_Stats");
 const FEEDS_COMPANY_URL      = url("Feeds_By_Company");
+
+const RINGO_KPI_URL    = url("Ringo_KPI_Monthly");
+const RINGO_REGION_URL = url("Ringo_By_Region");
+const RINGO_KM_URL     = url("Ringo_KM");
 
 // ============================================================
 // ПАРСИНГ
@@ -629,6 +633,303 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
 }
 
 // ============================================================
+// ВКЛАДКА RINGOSTAT
+// ============================================================
+const RINGO_PURPLE = "a855f7";
+const RINGO_BLUE   = "3b82f6";
+
+function MonthSelect({ months, value, onChange }) {
+  const UA_MONTHS_FULL = ["Січень","Лютий","Березень","Квітень","Травень","Червень","Липень","Серпень","Вересень","Жовтень","Листопад","Грудень"];
+  function labelFor(ym) {
+    if (!ym) return ym;
+    const [y, m] = ym.split("-");
+    return `${UA_MONTHS_FULL[(parseInt(m) || 1) - 1]} ${y}`;
+  }
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        background: C.surface, color: C.text, border: `1px solid ${C.border}`,
+        borderRadius: 8, padding: "7px 14px", fontSize: 13,
+        fontFamily: "'DM Mono', monospace", cursor: "pointer", outline: "none",
+      }}
+    >
+      {months.map(m => <option key={m} value={m}>{labelFor(m)}</option>)}
+    </select>
+  );
+}
+
+function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
+  const months = [...new Set((ringoKpiAll.data || []).map(r => r[0]))].filter(Boolean).sort().reverse();
+  const [selectedMonth, setSelectedMonth] = useState(() => months[0] || "");
+
+  // Sync selectedMonth if data arrives after initial render
+  useEffect(() => {
+    if (!selectedMonth && months.length > 0) setSelectedMonth(months[0]);
+  }, [months, selectedMonth]);
+
+  if (loading) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:400, color:C.muted, fontFamily:"'DM Mono', monospace", fontSize:13 }}>
+        завантаження…
+      </div>
+    );
+  }
+
+  // ── фільтр по місяцю ──────────────────────────────────
+  const kpiRow = (ringoKpiAll.data || []).find(r => r[0] === selectedMonth) || [];
+  const total   = parseInt(kpiRow[1]) || 0;
+  const missed  = parseInt(kpiRow[2]) || 0;
+  const basic   = parseInt(kpiRow[3]) || 0;
+  const premium = parseInt(kpiRow[4]) || 0;
+  const km      = parseInt(kpiRow[5]) || 0;
+  const answered     = total - missed;
+  const missedPct    = total > 0 ? Math.round(missed  / total * 100) : 0;
+  const answeredPct  = total > 0 ? Math.round(answered / total * 100) : 0;
+
+  const regionData = (ringoByRegionAll.data || [])
+    .filter(r => r[0] === selectedMonth)
+    .map(r => ({
+      region:  (r[1] || "").replace(" область",""),
+      basic:   parseInt(r[2]) || 0,
+      premium: parseInt(r[3]) || 0,
+      total:   parseInt(r[4]) || 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  const kmData = (ringoKmAll.data || [])
+    .filter(r => r[0] === selectedMonth)
+    .map(r => ({ id: r[1], name: r[2], region: r[3], calls: parseInt(r[4]) || 0 }))
+    .sort((a, b) => b.calls - a.calls);
+
+  const pieData = [
+    { name: "Premium", value: premium, color: "#" + RINGO_PURPLE },
+    { name: "Basic",   value: basic,   color: "#" + RINGO_BLUE   },
+  ];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+
+      {/* Заголовок з вибором місяця */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase", color:C.muted, fontFamily:"'DM Mono', monospace" }}>
+          Дзвінки Ringostat
+        </div>
+        {months.length > 0 && (
+          <MonthSelect months={months} value={selectedMonth} onChange={setSelectedMonth} />
+        )}
+      </div>
+
+      {/* ROW 1 — 4 KPI картки */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:14 }}>
+
+        {/* Загальна кількість */}
+        <Card>
+          <Label>Всього дзвінків</Label>
+          <div style={{ fontSize:56, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:C.text, lineHeight:1, letterSpacing:"-0.02em", fontVariantNumeric:"tabular-nums" }}>
+            {total.toLocaleString("uk-UA")}
+          </div>
+          <div style={{ marginTop:10, fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>
+            не котеджні ЖК
+          </div>
+        </Card>
+
+        {/* Пропущені */}
+        <Card>
+          <Label>Пропущені дзвінки</Label>
+          <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:4 }}>
+            <PctRing value={missedPct} color={C.red} />
+            <div>
+              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:C.red, fontVariantNumeric:"tabular-nums" }}>
+                {missed.toLocaleString("uk-UA")}
+              </div>
+              <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>
+                зі {total.toLocaleString("uk-UA")} дзвінків
+              </div>
+              <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>статус NO ANSWER</div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Premium */}
+        <Card>
+          <Label>Premium дзвінки</Label>
+          <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:4 }}>
+            <PctRing value={total > 0 ? Math.round(premium/total*100) : 0} color={"#" + RINGO_PURPLE} />
+            <div>
+              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:"#" + RINGO_PURPLE, fontVariantNumeric:"tabular-nums" }}>
+                {premium.toLocaleString("uk-UA")}
+              </div>
+              <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>popularity = premium</div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Basic */}
+        <Card>
+          <Label>Basic дзвінки</Label>
+          <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:4 }}>
+            <PctRing value={total > 0 ? Math.round(basic/total*100) : 0} color={"#" + RINGO_BLUE} />
+            <div>
+              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:"#" + RINGO_BLUE, fontVariantNumeric:"tabular-nums" }}>
+                {basic.toLocaleString("uk-UA")}
+              </div>
+              <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>popularity = basic</div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ROW 2 — Pie Basic/Premium + KМ картка */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+
+        <Card>
+          <Label>Розподіл Basic / Premium</Label>
+          <div style={{ display:"flex", alignItems:"center", gap:24, marginTop:8 }}>
+            <div style={{ width:180, height:180 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" paddingAngle={3}>
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => v.toLocaleString("uk-UA")} contentStyle={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"'DM Mono', monospace", fontSize:12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              {[
+                { label:"Premium", value:premium, pct: total>0?Math.round(premium/total*100):0, color:"#"+RINGO_PURPLE },
+                { label:"Basic",   value:basic,   pct: total>0?Math.round(basic/total*100):0,   color:"#"+RINGO_BLUE   },
+              ].map(item => (
+                <div key={item.label}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <div style={{ width:10, height:10, borderRadius:"50%", background:item.color }} />
+                    <span style={{ fontSize:12, color:C.muted, fontFamily:"'DM Mono', monospace" }}>{item.label}</span>
+                  </div>
+                  <div style={{ fontSize:28, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:item.color, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>
+                    {item.value.toLocaleString("uk-UA")}
+                  </div>
+                  <div style={{ fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>{item.pct}% від загальної</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <Label>Дзвінки в КМ (тільки Premium)</Label>
+          <div style={{ marginTop:12 }}>
+            <div style={{ fontSize:62, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:C.green, lineHeight:1, letterSpacing:"-0.02em", fontVariantNumeric:"tabular-nums" }}>
+              {km.toLocaleString("uk-UA")}
+            </div>
+            <div style={{ fontSize:12, color:C.muted, fontFamily:"'DM Mono', monospace", marginTop:8 }}>
+              cottage + popularity = premium
+            </div>
+            <div style={{ marginTop:20 }}>
+              <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", color:C.muted, fontFamily:"'DM Mono', monospace", marginBottom:10 }}>
+                Відповідь / Пропущено
+              </div>
+              {[
+                { label:"Відповідь", value:answered, pct:answeredPct, color:C.green },
+                { label:"Пропущено", value:missed,   pct:missedPct,   color:C.red  },
+              ].map(item => (
+                <div key={item.label} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                  <div style={{ width:80, fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>{item.label}</div>
+                  <div style={{ flex:1, height:6, background:C.border, borderRadius:3, overflow:"hidden" }}>
+                    <div style={{ width:`${item.pct}%`, height:"100%", background:item.color, borderRadius:3, transition:"width 0.8s ease" }} />
+                  </div>
+                  <div style={{ width:36, fontSize:11, fontFamily:"'DM Mono', monospace", color:item.color, textAlign:"right", fontWeight:700 }}>{item.pct}%</div>
+                  <div style={{ width:52, fontSize:10, fontFamily:"'DM Mono', monospace", color:C.muted, textAlign:"right" }}>{item.value.toLocaleString("uk-UA")}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ROW 3 — Stacked bar chart по регіонах */}
+      {regionData.length > 0 && (
+        <Card>
+          <Label>Розподіл дзвінків по регіонах (Basic / Premium)</Label>
+          <div style={{ marginTop:14, height:260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={regionData} barCategoryGap="28%" margin={{ top:8, right:8, left:0, bottom:0 }}>
+                <XAxis dataKey="region" tick={{ fill:C.muted, fontSize:10, fontFamily:"'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="basic"   name="Basic"   fill={"#"+RINGO_BLUE}   radius={[0,0,0,0]} stackId="a" />
+                <Bar dataKey="premium" name="Premium" fill={"#"+RINGO_PURPLE} radius={[3,3,0,0]} stackId="a">
+                  <LabelList dataKey="total" position="top"
+                    style={{ fill:C.muted, fontSize:9, fontFamily:"'DM Mono', monospace" }}
+                    formatter={v => v > 0 ? v.toLocaleString("uk-UA") : ""} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display:"flex", gap:20, marginTop:8 }}>
+            {[["#"+RINGO_BLUE,"Basic"], ["#"+RINGO_PURPLE,"Premium"]].map(([color, label]) => (
+              <div key={label} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>
+                <div style={{ width:10, height:10, borderRadius:2, background:color }} />{label}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ROW 4 — Таблиця KМ по ЖК */}
+      {kmData.length > 0 && (
+        <Card>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+            <Label>КМ — дзвінки по ЖК (Premium cottage)</Label>
+            <div style={{ fontSize:12, fontFamily:"'DM Mono', monospace", color:C.green, background:"#1a2d1a", padding:"3px 10px", borderRadius:6 }}>
+              {kmData.length} КМ
+            </div>
+          </div>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+              <thead>
+                <tr>
+                  {["#", "Назва КМ", "Регіон", "Дзвінків"].map(h => (
+                    <th key={h} style={{ textAlign: h==="Дзвінків" ? "right" : "left", padding:"6px 10px", color:C.muted, fontFamily:"'DM Mono', monospace", fontSize:10, letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:`1px solid ${C.border}`, fontWeight:600 }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {kmData.map((row, i) => {
+                  const maxCalls = kmData[0]?.calls || 1;
+                  const pct = Math.round(row.calls / maxCalls * 100);
+                  return (
+                    <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ padding:"9px 10px", color:C.muted, fontFamily:"'DM Mono', monospace", fontSize:11, width:32 }}>{i+1}</td>
+                      <td style={{ padding:"9px 10px", fontWeight:600, color:C.text }}>{row.name}</td>
+                      <td style={{ padding:"9px 10px", color:C.muted, fontSize:12 }}>{row.region}</td>
+                      <td style={{ padding:"9px 10px", textAlign:"right" }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:10 }}>
+                          <div style={{ width:80, height:4, background:C.border, borderRadius:2, overflow:"hidden" }}>
+                            <div style={{ width:`${pct}%`, height:"100%", background:C.green, borderRadius:2 }} />
+                          </div>
+                          <span style={{ fontFamily:"'DM Mono', monospace", fontWeight:700, color:C.green, minWidth:40, textAlign:"right" }}>
+                            {row.calls.toLocaleString("uk-UA")}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+    </div>
+  );
+}
+
+// ============================================================
 // ЗАГЛУШКА
 // ============================================================
 function ComingSoon({ name }) {
@@ -672,6 +973,14 @@ export default function Dashboard() {
   const [feedsLoaded, setFeedsLoaded]             = useState(false);
   const [feedsLoading, setFeedsLoading]           = useState(false);
   const [feedsError, setFeedsError]               = useState(null);
+
+  // Ringostat data
+  const [ringoKpiAll,      setRingoKpiAll]      = useState({ headers:[], data:[] });
+  const [ringoByRegionAll, setRingoByRegionAll] = useState({ headers:[], data:[] });
+  const [ringoKmAll,       setRingoKmAll]       = useState({ headers:[], data:[] });
+  const [ringoLoaded,      setRingoLoaded]      = useState(false);
+  const [ringoLoading,     setRingoLoading]     = useState(false);
+  const [ringoError,       setRingoError]       = useState(null);
 
   const isDemo = API_KEY.includes("ВСТАВТЕ");
 
@@ -753,12 +1062,39 @@ export default function Dashboard() {
     setLoading(false);
   }, [isDemo, fetchData]);
 
+  const fetchRingoData = useCallback(async () => {
+    if (isDemo) return;
+    setRingoLoading(true);
+    setRingoError(null);
+    try {
+      const [r1, r2, r3] = await Promise.all([
+        fetch(RINGO_KPI_URL), fetch(RINGO_REGION_URL), fetch(RINGO_KM_URL),
+      ]);
+      const [j1, j2, j3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
+      setRingoKpiAll(parseTable(j1.values));
+      setRingoByRegionAll(parseTable(j2.values));
+      setRingoKmAll(parseTable(j3.values));
+      setRingoLoaded(true);
+    } catch {
+      setRingoError("Не вдалося завантажити дані Ringostat.");
+    } finally {
+      setRingoLoading(false);
+    }
+  }, [isDemo]);
+
   // Lazy load feeds when tab is first opened
   useEffect(() => {
     if (activeTab === "Фіди" && !feedsLoaded && !isDemo) {
       fetchFeedsData();
     }
   }, [activeTab, feedsLoaded, isDemo, fetchFeedsData]);
+
+  // Lazy load ringostat when tab is first opened
+  useEffect(() => {
+    if (activeTab === "Ringostat" && !ringoLoaded && !isDemo) {
+      fetchRingoData();
+    }
+  }, [activeTab, ringoLoaded, isDemo, fetchRingoData]);
 
   return (
     <div style={{ background: C.bg, minHeight: "100vh", color: C.text, fontFamily: "'DM Sans', sans-serif", paddingBottom: 48 }}>
@@ -805,7 +1141,7 @@ export default function Dashboard() {
                 display: "flex", alignItems: "center", gap: 6,
               }}>
                 {tab}
-                {(tab === "Layouts" || tab === "Ringostat") && (
+                {tab === "Layouts" && (
                   <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.border, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em" }}>
                     soon
                   </span>
@@ -825,6 +1161,15 @@ export default function Dashboard() {
               {feedsLoading ? "…" : "↻"}
             </button>
           )}
+          {activeTab === "Ringostat" && ringoLoaded && (
+            <button onClick={fetchRingoData} disabled={ringoLoading || isDemo} style={{
+              background: "none", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8,
+              padding: "8px 14px", fontSize: 13, cursor: ringoLoading || isDemo ? "not-allowed" : "pointer",
+              opacity: ringoLoading || isDemo ? 0.5 : 1, fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {ringoLoading ? "…" : "↻"}
+            </button>
+          )}
           <button onClick={fetchData} disabled={loading || isDemo} style={{
             background: C.accent, color: "#fff", border: "none", borderRadius: 8,
             padding: "8px 18px", fontSize: 13, fontWeight: 600,
@@ -836,9 +1181,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {(error || feedsError) && (
+      {(error || feedsError || ringoError) && (
         <div style={{ margin: "20px 36px", padding: "12px 18px", background: "#2d1b1b", border: `1px solid ${C.red}`, borderRadius: 10, color: C.red, fontSize: 13, fontFamily: "'DM Mono', monospace" }}>
-          ⚠ {error || feedsError}
+          ⚠ {error || feedsError || ringoError}
         </div>
       )}
 
@@ -847,7 +1192,7 @@ export default function Dashboard() {
         {activeTab === "Realbase"  && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
         {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} feedsByCompany={feedsByCompany} loading={feedsLoading} />}
         {activeTab === "Layouts"   && <ComingSoon name="Layouts" />}
-        {activeTab === "Ringostat" && <ComingSoon name="Ringostat" />}
+        {activeTab === "Ringostat" && <RingostatTab ringoKpiAll={ringoKpiAll} ringoByRegionAll={ringoByRegionAll} ringoKmAll={ringoKmAll} loading={ringoLoading} />}
       </div>
     </div>
   );
