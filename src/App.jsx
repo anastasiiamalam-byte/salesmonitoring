@@ -698,10 +698,16 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
     }))
     .sort((a, b) => b.total - a.total);
 
-  const kmData = (ringoKmAll.data || [])
-    .filter(r => r[0] === selectedMonth)
-    .map(r => ({ id: r[1], name: r[2], region: r[3], calls: parseInt(r[4]) || 0 }))
-    .sort((a, b) => b.calls - a.calls);
+  // Дані по всіх місяцях для графіків трендів (не фільтруємо по місяцю)
+  const allMonthsData = [...(ringoKpiAll.data || [])]
+    .sort((a, b) => (a[0] || "").localeCompare(b[0] || ""))
+    .map(r => ({
+      month:      formatMonth(r[0]),
+      km:         parseInt(r[5]) || 0,
+      missed:     parseInt(r[2]) || 0,
+      total:      parseInt(r[1]) || 0,
+      missedPct:  parseInt(r[1]) > 0 ? Math.round(parseInt(r[2]) / parseInt(r[1]) * 100) : 0,
+    }));
 
   const pieData = [
     { name: "Premium", value: premium, color: "#" + RINGO_PURPLE },
@@ -781,74 +787,77 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         </Card>
       </div>
 
-      {/* ROW 2 — Pie Basic/Premium + KМ картка */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-
-        <Card>
-          <Label>Розподіл Basic / Premium</Label>
-          <div style={{ display:"flex", alignItems:"center", gap:24, marginTop:8 }}>
-            <div style={{ width:180, height:180 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" paddingAngle={3}>
-                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => v.toLocaleString("uk-UA")} contentStyle={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"'DM Mono', monospace", fontSize:12 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-              {[
-                { label:"Premium", value:premium, pct: total>0?Math.round(premium/total*100):0, color:"#"+RINGO_PURPLE },
-                { label:"Basic",   value:basic,   pct: total>0?Math.round(basic/total*100):0,   color:"#"+RINGO_BLUE   },
-              ].map(item => (
-                <div key={item.label}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                    <div style={{ width:10, height:10, borderRadius:"50%", background:item.color }} />
-                    <span style={{ fontSize:12, color:C.muted, fontFamily:"'DM Mono', monospace" }}>{item.label}</span>
-                  </div>
-                  <div style={{ fontSize:28, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:item.color, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>
-                    {item.value.toLocaleString("uk-UA")}
-                  </div>
-                  <div style={{ fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>{item.pct}% від загальної</div>
+      {/* ROW 2 — Pie Basic/Premium (вибраний місяць) */}
+      <Card>
+        <Label>Розподіл Basic / Premium — {formatMonth(selectedMonth)}</Label>
+        <div style={{ display:"flex", alignItems:"center", gap:32, marginTop:8 }}>
+          <div style={{ width:180, height:180, flexShrink:0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" paddingAngle={3}>
+                  {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip formatter={(v) => v.toLocaleString("uk-UA")} contentStyle={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"'DM Mono', monospace", fontSize:12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display:"flex", gap:40 }}>
+            {[
+              { label:"Premium", value:premium, pct: total>0?Math.round(premium/total*100):0, color:"#"+RINGO_PURPLE },
+              { label:"Basic",   value:basic,   pct: total>0?Math.round(basic/total*100):0,   color:"#"+RINGO_BLUE   },
+              { label:"Пропущені", value:missed, pct: missedPct, color:C.red },
+            ].map(item => (
+              <div key={item.label}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                  <div style={{ width:10, height:10, borderRadius:"50%", background:item.color }} />
+                  <span style={{ fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>{item.label}</span>
                 </div>
-              ))}
-            </div>
+                <div style={{ fontSize:32, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:item.color, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>
+                  {item.value.toLocaleString("uk-UA")}
+                </div>
+                <div style={{ fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace", marginTop:4 }}>{item.pct}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* ROW 3 — КМ по місяцях + Пропущені по місяцях */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+        <Card>
+          <Label>Дзвінки в КМ по місяцях (Premium cottage)</Label>
+          <div style={{ marginTop:14, height:220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={allMonthsData} barCategoryGap="30%" margin={{ top:20, right:8, left:0, bottom:0 }}>
+                <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="km" name="КМ дзвінки" fill={C.green} radius={[4,4,0,0]}>
+                  <LabelList dataKey="km" position="top" style={{ fill:C.text, fontSize:11, fontFamily:"'DM Mono', monospace", fontWeight:600 }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </Card>
 
         <Card>
-          <Label>Дзвінки в КМ (тільки Premium)</Label>
-          <div style={{ marginTop:12 }}>
-            <div style={{ fontSize:62, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:C.green, lineHeight:1, letterSpacing:"-0.02em", fontVariantNumeric:"tabular-nums" }}>
-              {km.toLocaleString("uk-UA")}
-            </div>
-            <div style={{ fontSize:12, color:C.muted, fontFamily:"'DM Mono', monospace", marginTop:8 }}>
-              cottage + popularity = premium
-            </div>
-            <div style={{ marginTop:20 }}>
-              <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", color:C.muted, fontFamily:"'DM Mono', monospace", marginBottom:10 }}>
-                Відповідь / Пропущено
-              </div>
-              {[
-                { label:"Відповідь", value:answered, pct:answeredPct, color:C.green },
-                { label:"Пропущено", value:missed,   pct:missedPct,   color:C.red  },
-              ].map(item => (
-                <div key={item.label} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                  <div style={{ width:80, fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>{item.label}</div>
-                  <div style={{ flex:1, height:6, background:C.border, borderRadius:3, overflow:"hidden" }}>
-                    <div style={{ width:`${item.pct}%`, height:"100%", background:item.color, borderRadius:3, transition:"width 0.8s ease" }} />
-                  </div>
-                  <div style={{ width:36, fontSize:11, fontFamily:"'DM Mono', monospace", color:item.color, textAlign:"right", fontWeight:700 }}>{item.pct}%</div>
-                  <div style={{ width:52, fontSize:10, fontFamily:"'DM Mono', monospace", color:C.muted, textAlign:"right" }}>{item.value.toLocaleString("uk-UA")}</div>
-                </div>
-              ))}
-            </div>
+          <Label>% пропущених дзвінків по місяцях</Label>
+          <div style={{ marginTop:14, height:220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={allMonthsData} barCategoryGap="30%" margin={{ top:20, right:8, left:0, bottom:0 }}>
+                <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} allowDecimals={false} tickFormatter={v => v + "%"} domain={[0, 100]} />
+                <Tooltip formatter={(v) => v + "%"} contentStyle={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"'DM Mono', monospace", fontSize:12 }} />
+                <Bar dataKey="missedPct" name="Пропущені %" fill={C.red} radius={[4,4,0,0]}>
+                  <LabelList dataKey="missedPct" position="top" style={{ fill:C.text, fontSize:11, fontFamily:"'DM Mono', monospace", fontWeight:600 }} formatter={v => v + "%"} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </Card>
       </div>
 
-      {/* ROW 3 — Stacked bar chart по регіонах */}
+      {/* ROW 4 — Stacked bar chart по регіонах */}
       {regionData.length > 0 && (
         <Card>
           <Label>Розподіл дзвінків по регіонах (Basic / Premium)</Label>
@@ -877,8 +886,8 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         </Card>
       )}
 
-      {/* ROW 4 — Таблиця KМ по ЖК */}
-      {kmData.length > 0 && (
+      {/* ROW 5 — Таблиця KМ по ЖК (прихована — замінена графіком) */}
+      {false && kmData.length > 0 && (
         <Card>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
             <Label>КМ — дзвінки по ЖК (Premium cottage)</Label>
