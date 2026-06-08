@@ -737,7 +737,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
             {total.toLocaleString("uk-UA")}
           </div>
           <div style={{ marginTop:10, fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>
-            не котеджні ЖК
+            усі дзвінки за місяць
           </div>
         </Card>
 
@@ -787,10 +787,29 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         </Card>
       </div>
 
+      {/* ROW 1.5 — Загальна кількість дзвінків по місяцях */}
+      <Card>
+        <Label>Кількість дзвінків по місяцях</Label>
+        <div style={{ marginTop:14, height:220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={allMonthsData} barCategoryGap="30%" margin={{ top:20, right:8, left:0, bottom:0 }}>
+              <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="total" name="Дзвінків" fill={C.accent} radius={[4,4,0,0]}>
+                <LabelList dataKey="total" position="top"
+                  style={{ fill:C.text, fontSize:11, fontFamily:"'DM Mono', monospace", fontWeight:600 }}
+                  formatter={v => v.toLocaleString("uk-UA")} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
       {/* ROW 2 — Pie Basic/Premium (вибраний місяць) */}
       <Card>
         <Label>Розподіл Basic / Premium — {formatMonth(selectedMonth)}</Label>
-        <div style={{ display:"flex", alignItems:"center", gap:32, marginTop:8 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:48, marginTop:8 }}>
           <div style={{ width:180, height:180, flexShrink:0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
