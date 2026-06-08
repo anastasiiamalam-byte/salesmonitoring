@@ -4,11 +4,18 @@
 // Запускати по тригеру: щогодини
 // ============================================================
 
-var DB_HOST = ScriptProperties.getProperty("DB_HOST");
-var DB_PORT = ScriptProperties.getProperty("DB_PORT") || "3306";
-var DB_NAME = ScriptProperties.getProperty("DB_NAME");
-var DB_USER = ScriptProperties.getProperty("DB_USER");
-var DB_PASS = ScriptProperties.getProperty("DB_PASS");
+function getConnection() {
+  var props = PropertiesService.getScriptProperties();
+  var host  = props.getProperty("DB_HOST");
+  var port  = props.getProperty("DB_PORT") || "3306";
+  var db    = props.getProperty("DB_NAME");
+  var user  = props.getProperty("DB_USER");
+  var pass  = props.getProperty("DB_PASS");
+  var url   = `jdbc:mysql://${host}:${port}/${db}`;
+  Logger.log("DB URL: " + url);
+  Logger.log("DB USER: " + user);
+  return Jdbc.getConnection(url, user, pass);
+}
 
 var SHEET_ID = "1G40uOzR0pMyFw8BoEDChmbTEJhkyVTlrwWVKCokevgg";
 
@@ -18,8 +25,7 @@ var BUILDING_NAME_COL = "name_uk";
 function syncRingostatData() {
   var conn;
   try {
-    var url = "jdbc:mysql://" + DB_HOST + ":" + DB_PORT + "/" + DB_NAME + "?useSSL=false";
-    conn = Jdbc.getConnection(url, DB_USER, DB_PASS);
+    conn = getConnection();
 
     writeRingoKpiMonthly(conn);
     writeRingoByRegion(conn);
@@ -45,8 +51,8 @@ function writeRingoKpiMonthly(conn) {
       DATE_FORMAT(rc.call_timestamp, '%Y-%m') AS month,
       COUNT(*)                                                               AS total_calls,
       SUM(CASE WHEN rc.call_status = 'NO ANSWER' THEN 1 ELSE 0 END)         AS missed_calls,
-      SUM(CASE WHEN b.popularity = 'basic'   THEN 1 ELSE 0 END)             AS basic_calls,
-      SUM(CASE WHEN b.popularity = 'premium' THEN 1 ELSE 0 END)             AS premium_calls,
+      SUM(CASE WHEN b.status = 'basic'   THEN 1 ELSE 0 END)             AS basic_calls,
+      SUM(CASE WHEN b.status = 'premium' THEN 1 ELSE 0 END)             AS premium_calls,
       0                                                                      AS km_premium_calls
     FROM b2b.ringo_call rc
     INNER JOIN buildings b ON rc.building_id = b.building_id
@@ -64,7 +70,7 @@ function writeRingoKpiMonthly(conn) {
     INNER JOIN buildings b ON rc.building_id = b.building_id
     WHERE rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 6 MONTH), '%Y-%m-01')
       AND b.building_type = 'cottage'
-      AND b.popularity = 'premium'
+      AND b.status = 'premium'
     GROUP BY DATE_FORMAT(rc.call_timestamp, '%Y-%m')
     ORDER BY month DESC
   `;
@@ -102,8 +108,8 @@ function writeRingoByRegion(conn) {
         WHEN gc.city_id = 1 THEN 'Київ'
         ELSE CONCAT(gr.nominative_uk, ' область')
       END                                                                    AS region,
-      SUM(CASE WHEN b.popularity = 'basic'   THEN 1 ELSE 0 END)             AS basic_calls,
-      SUM(CASE WHEN b.popularity = 'premium' THEN 1 ELSE 0 END)             AS premium_calls,
+      SUM(CASE WHEN b.status = 'basic'   THEN 1 ELSE 0 END)             AS basic_calls,
+      SUM(CASE WHEN b.status = 'premium' THEN 1 ELSE 0 END)             AS premium_calls,
       COUNT(*)                                                               AS total_calls
     FROM b2b.ringo_call rc
     INNER JOIN buildings b  ON rc.building_id = b.building_id
@@ -148,9 +154,9 @@ function writeRingoKM(conn) {
     INNER JOIN buildings b  ON rc.building_id = b.building_id
     INNER JOIN geo_regions gr ON b.region_id  = gr.region_id
     INNER JOIN geo_cities  gc ON b.city_id    = gc.city_id
-    WHERE rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 6 MONTH), '%Y-%m-01')
+    WHERE rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 12 MONTH), '%Y-%m-01')
       AND b.building_type = 'cottage'
-      AND b.popularity    = 'premium'
+      AND b.status    = 'premium'
     GROUP BY
       DATE_FORMAT(rc.call_timestamp, '%Y-%m'),
       b.building_id,
