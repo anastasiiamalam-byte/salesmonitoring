@@ -1533,7 +1533,7 @@ function Dashboard({ onLogout }) {
       </div>
 
       {/* Шапка */}
-      <div style={{ borderBottom: `1px solid ${C.border}`, padding: "0 48px", display: "flex", alignItems: "stretch", justifyContent: "space-between", position: "sticky", top: 0, background: C.bg, zIndex: 10 }}>
+      <div style={{ borderBottom: `1px solid ${C.border}`, padding: "0 100px", display: "flex", alignItems: "stretch", justifyContent: "space-between", position: "sticky", top: 0, background: C.bg, zIndex: 10 }}>
 
         <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
           <div style={{ display: "flex", alignItems: "center", paddingRight: 32, borderRight: `1px solid ${C.border}` }}>
@@ -1619,13 +1619,13 @@ function Dashboard({ onLogout }) {
       </div>
 
       {(error || feedsError || ringoError || layoutsError) && (
-        <div style={{ margin: "20px 48px", padding: "12px 18px", background: dark ? "#2e150f" : "#fbe0da", border: `1px solid ${C.red}`, borderRadius: 10, color: C.red, fontSize: 13, fontFamily: "'Lun Mono', monospace" }}>
+        <div style={{ margin: "20px 100px", padding: "12px 18px", background: dark ? "#2e150f" : "#fbe0da", border: `1px solid ${C.red}`, borderRadius: 10, color: C.red, fontSize: 13, fontFamily: "'Lun Mono', monospace" }}>
           ⚠ {error || feedsError || ringoError || layoutsError}
         </div>
       )}
 
       {/* Контент вкладок */}
-      <div style={{ padding: "24px 48px", position: "relative", zIndex: 1 }}>
+      <div style={{ padding: "24px 100px", position: "relative", zIndex: 1 }}>
         {activeTab === "Realbase"  && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
         {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} feedsByCompany={feedsByCompany} loading={feedsLoading} />}
         {activeTab === "Layouts"   && <LayoutsTab layoutsMonthly={layoutsMonthly} layoutsCoverage={layoutsCoverage} layoutsKM={layoutsKM} layoutsBuildings={layoutsBuildings} loading={layoutsLoading} />}
