@@ -1,3 +1,17 @@
+@font-face { font-family: "Lun"; src: url("/fonts/lun/Lun-Light.woff2") format("woff2"), url("/fonts/lun/Lun-Light.woff") format("woff"); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lun"; src: url("/fonts/lun/Lun-Regular.woff2") format("woff2"), url("/fonts/lun/Lun-Regular.woff") format("woff"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lun"; src: url("/fonts/lun/Lun-Medium.woff2") format("woff2"), url("/fonts/lun/Lun-Medium.woff") format("woff"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lun"; src: url("/fonts/lun/Lun-Bold.woff2") format("woff2"), url("/fonts/lun/Lun-Bold.woff") format("woff"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lun"; src: url("/fonts/lun/Lun-Black.woff2") format("woff2"), url("/fonts/lun/Lun-Black.woff") format("woff"); font-weight: 900; font-style: normal; font-display: swap; }
+
+@font-face { font-family: "Lun Mono"; src: url("/fonts/lun/Lun-MonoLight.woff2") format("woff2"), url("/fonts/lun/Lun-MonoLight.woff") format("woff"); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lun Mono"; src: url("/fonts/lun/Lun-MonoRegular.woff2") format("woff2"), url("/fonts/lun/Lun-MonoRegular.woff") format("woff"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lun Mono"; src: url("/fonts/lun/Lun-MonoMedium.woff2") format("woff2"), url("/fonts/lun/Lun-MonoMedium.woff") format("woff"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lun Mono"; src: url("/fonts/lun/Lun-MonoBold.woff2") format("woff2"), url("/fonts/lun/Lun-MonoBold.woff") format("woff"); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: "Lun Display"; src: url("/fonts/lun/Lun-DisplayBold.woff2") format("woff2"), url("/fonts/lun/Lun-DisplayBold.woff") format("woff"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lun Display"; src: url("/fonts/lun/Lun-DisplayBlack.woff2") format("woff2"), url("/fonts/lun/Lun-DisplayBlack.woff") format("woff"); font-weight: 900; font-style: normal; font-display: swap; }
+
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -11,9 +25,9 @@
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --sans: 'Lun', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Lun Display', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'Lun Mono', ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
@@ -55,11 +69,9 @@ body {
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 1800px;
   margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;

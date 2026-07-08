@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext, createContext } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, PieChart, Pie, Cell, Legend } from "recharts";
 
 // ============================================================
@@ -25,6 +25,11 @@ const RINGO_KPI_URL    = url("Ringo_KPI_Monthly");
 const RINGO_REGION_URL = url("Ringo_By_Region");
 const RINGO_KM_URL     = url("Ringo_KM");
 
+const LAYOUTS_MONTHLY_URL   = url("Layouts_Monthly");
+const LAYOUTS_COVERAGE_URL  = url("Layouts_Coverage");
+const LAYOUTS_KM_URL        = url("Layouts_KM");
+const LAYOUTS_BUILDINGS_URL = url("Layouts_Buildings_Missing");
+
 // ============================================================
 // ПАРСИНГ
 // ============================================================
@@ -41,14 +46,32 @@ function parseTable(rows) {
 }
 
 // ============================================================
-// КОЛЬОРИ
+// АВТОРИЗАЦІЯ (для команди)
 // ============================================================
-const C = {
-  bg: "#0d1117", surface: "#161b22", border: "#21262d",
-  accent: "#58a6ff", green: "#3fb950", red: "#f85149",
-  yellow: "#d29922", muted: "#8b949e", text: "#e6edf3",
-  orange: "#f97316",
+// TODO: замінити на реальні логіни/паролі команди
+const TEAM_USERS = [
+  { login: "content-ops", password: "tNHBlqQRwAJT9D" },
+];
+const AUTH_KEY = "sm_auth_ok";
+
+// ============================================================
+// КОЛЬОРИ (теми)
+// ============================================================
+// Брендова палітра: Апероль-шприц, Мандариновий фреш, Київська цегла,
+// Київська панелька, Київська ніч, Ніч на Кирилівському, Седан-баклажан
+const DARK = {
+  bg: "#0d0d0d", surface: "#1c1420", border: "#332a3a",
+  accent: "#b15aa8", green: "#3fb950", red: "#e8402c",
+  yellow: "#d29922", muted: "#9c93a0", text: "#ecece1",
+  orange: "#ff6600",
 };
+const LIGHT = {
+  bg: "#ecece1", surface: "#ffffff", border: "#dedacd",
+  accent: "#7a2d6e", green: "#1a9850", red: "#d0371f",
+  yellow: "#b45309", muted: "#6b6558", text: "#0d0d0d",
+  orange: "#e65100",
+};
+const ThemeContext = createContext(DARK);
 
 // ============================================================
 // ХЕЛПЕРИ
@@ -62,23 +85,36 @@ function formatMonth(ym) {
 function shortRegion(name) {
   return (name || "").replace(/ська$|зька$|цька$|ська область$/, "");
 }
+// Числовий ключ "YYYY-M"/"YYYY-MM" для коректного хронологічного сортування
+// (не залежить від наявності провідного нуля в місяці)
+function monthKey(ym) {
+  const [y, m] = (ym || "").split("-");
+  return (parseInt(y) || 0) * 12 + (parseInt(m) || 0);
+}
 
 // ============================================================
 // UI
 // ============================================================
-const Card = ({ children, style = {} }) => (
-  <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "20px 24px", ...style }}>
-    {children}
-  </div>
-);
+const Card = ({ children, style = {} }) => {
+  const C = useContext(ThemeContext);
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "20px 24px", ...style }}>
+      {children}
+    </div>
+  );
+};
 
-const Label = ({ children }) => (
-  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>
-    {children}
-  </div>
-);
+const Label = ({ children }) => {
+  const C = useContext(ThemeContext);
+  return (
+    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginBottom: 8, fontFamily: "'Lun Mono', monospace" }}>
+      {children}
+    </div>
+  );
+};
 
 function PctRing({ value, color, size = 84 }) {
+  const C = useContext(ThemeContext);
   const r = 32, cx = 42, cy = 42, circ = 2 * Math.PI * r;
   const dash = (Math.min(100, value) / 100) * circ;
   return (
@@ -94,18 +130,21 @@ function PctRing({ value, color, size = 84 }) {
   );
 }
 
-function ProgressBar({ value, color = C.accent }) {
+function ProgressBar({ value, color }) {
+  const C = useContext(ThemeContext);
+  const barColor = color || C.accent;
   return (
     <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
-      <div style={{ width: `${Math.min(100, value || 0)}%`, height: "100%", background: color, borderRadius: 2, transition: "width 0.8s ease" }} />
+      <div style={{ width: `${Math.min(100, value || 0)}%`, height: "100%", background: barColor, borderRadius: 2, transition: "width 0.8s ease" }} />
     </div>
   );
 }
 
 const CustomTooltip = ({ active, payload, label }) => {
+  const C = useContext(ThemeContext);
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, fontFamily: "'DM Mono', monospace" }}>
+    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, fontFamily: "'Lun Mono', monospace" }}>
       <div style={{ color: C.muted, marginBottom: 4 }}>{label}</div>
       {payload.map((p, i) => <div key={i} style={{ color: p.fill || p.color }}>{p.name}: <strong>{p.value}</strong></div>)}
     </div>
@@ -116,6 +155,8 @@ const CustomTooltip = ({ active, payload, label }) => {
 // ВКЛАДКА FLATS
 // ============================================================
 function FlatsTab({ kpi, regions, highList }) {
+  const C = useContext(ThemeContext);
+  const [highOpen, setHighOpen] = useState(false);
   const n = v => parseInt(kpi[v]) || 0;
   const regionChart = regions.data.slice(0, 8).map(r => ({
     name: (r[0] || "").replace(/ська$/, "").replace(/зька$/, ""),
@@ -131,10 +172,10 @@ function FlatsTab({ kpi, regions, highList }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
         <Card>
           <Label>Активних ЖК</Label>
-          <div style={{ fontSize: 56, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.text, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ fontSize: 56, fontWeight: 700, fontFamily: "'Lun', sans-serif", color: C.text, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
             {n("active_total")}
           </div>
-          <div style={{ marginTop: 10, fontSize: 12, color: C.muted, fontFamily: "'DM Mono', monospace" }}>{kpi.period || ""}</div>
+          <div style={{ marginTop: 10, fontSize: 12, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>{kpi.period || ""}</div>
           <div style={{ marginTop: 4, fontSize: 11, color: C.muted }}>розділ + ціни на сайті = Yes</div>
         </Card>
 
@@ -148,7 +189,7 @@ function FlatsTab({ kpi, regions, highList }) {
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
               <PctRing value={n(item.key)} color={item.color} />
               <div>
-                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: item.color, fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Lun', sans-serif", color: item.color, fontVariantNumeric: "tabular-nums" }}>
                   {n(item.num)}<span style={{ fontSize: 13, color: C.muted, fontWeight: 400 }}>/{n(item.total)}</span>
                 </div>
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{item.sub}</div>
@@ -164,8 +205,8 @@ function FlatsTab({ kpi, regions, highList }) {
         <div style={{ marginTop: 14, height: 210 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={regionChart} barGap={3} barCategoryGap="28%">
-              <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: 11, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: C.muted, fontSize: 11, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: 11, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.muted, fontSize: 11, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="Всього"   fill="#2d333b" radius={[3,3,0,0]} />
               <Bar dataKey="Оновлено" fill={C.green}  radius={[3,3,0,0]} />
@@ -175,7 +216,7 @@ function FlatsTab({ kpi, regions, highList }) {
         </div>
         <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
           {[["#2d333b","Всього активних"], [C.green,"Оновлено"], [C.red,"High пріоритет"]].map(([color, label]) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
               <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />{label}
             </div>
           ))}
@@ -190,7 +231,7 @@ function FlatsTab({ kpi, regions, highList }) {
             <thead>
               <tr>
                 {regions.headers.map(h => (
-                  <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
+                  <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -206,7 +247,7 @@ function FlatsTab({ kpi, regions, highList }) {
                         {isPct ? (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ width: 44 }}><ProgressBar value={pctVal} color={pctColor} /></div>
-                            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12 }}>{cell}</span>
+                            <span style={{ fontFamily: "'Lun Mono', monospace", fontSize: 12 }}>{cell}</span>
                           </div>
                         ) : cell}
                       </td>
@@ -221,43 +262,51 @@ function FlatsTab({ kpi, regions, highList }) {
 
       {/* ROW 4 — Не оновлені High */}
       <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <Label>High — не оновлені цього місяця</Label>
-          <div style={{ fontSize: 12, fontFamily: "'DM Mono', monospace", color: C.red, background: "#2d1b1b", padding: "3px 10px", borderRadius: 6 }}>
+        <div
+          onClick={() => setHighOpen(o => !o)}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: highOpen ? 12 : 0, cursor: "pointer", userSelect: "none" }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ color: C.muted, fontSize: 11, transition: "transform 0.2s", display: "inline-block", transform: highOpen ? "rotate(90deg)" : "rotate(0deg)" }}>▸</span>
+            <Label style={{ marginBottom: 0 }}>High — не оновлені цього місяця</Label>
+          </div>
+          <div style={{ fontSize: 12, fontFamily: "'Lun Mono', monospace", color: C.red, background: C === DARK ? "#2e150f" : "#fbe0da", padding: "3px 10px", borderRadius: 6 }}>
             {highList.data.length} ЖК
           </div>
         </div>
-        {highList.data.length === 0 ? (
-          <div style={{ padding: "20px", textAlign: "center", color: C.green, fontFamily: "'DM Mono', monospace", fontSize: 13 }}>
-            ✓ Всі high ЖК оновлені цього місяця
-          </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr>
-                  {highList.headers.map(h => (
-                    <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {highList.data.map((row, i) => {
-                  const days = parseInt(row[row.length - 1]) || 0;
-                  const urgColor = days > 60 ? C.red : days > 30 ? C.yellow : C.muted;
-                  return (
-                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      {row.map((cell, j) => (
-                        <td key={j} style={{ padding: "10px", fontWeight: j === 1 ? 600 : 400, color: j === row.length - 1 ? urgColor : C.text, fontFamily: j === row.length - 1 ? "'DM Mono', monospace" : "inherit" }}>
-                          {cell}
-                        </td>
-                      ))}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        {highOpen && (
+          highList.data.length === 0 ? (
+            <div style={{ padding: "20px", textAlign: "center", color: C.green, fontFamily: "'Lun Mono', monospace", fontSize: 13 }}>
+              ✓ Всі high ЖК оновлені цього місяця
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    {highList.headers.map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {highList.data.map((row, i) => {
+                    const days = parseInt(row[row.length - 1]) || 0;
+                    const urgColor = days > 60 ? C.red : days > 30 ? C.yellow : C.muted;
+                    return (
+                      <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        {row.map((cell, j) => (
+                          <td key={j} style={{ padding: "10px", fontWeight: j === 1 ? 600 : 400, color: j === row.length - 1 ? urgColor : C.text, fontFamily: j === row.length - 1 ? "'Lun Mono', monospace" : "inherit" }}>
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </Card>
     </div>
@@ -269,6 +318,7 @@ function FlatsTab({ kpi, regions, highList }) {
 // ============================================================
 // Кнопки фільтра
 function FilterPills({ options, value, onChange }) {
+  const C = useContext(ThemeContext);
   return (
     <div style={{ display: "flex", gap: 6 }}>
       {options.map(o => (
@@ -276,7 +326,7 @@ function FilterPills({ options, value, onChange }) {
           background: value === o.value ? C.accent : C.border,
           color: value === o.value ? "#fff" : C.muted,
           border: "none", borderRadius: 6, padding: "4px 12px",
-          fontSize: 11, fontFamily: "'DM Mono', monospace",
+          fontSize: 11, fontFamily: "'Lun Mono', monospace",
           cursor: "pointer", fontWeight: value === o.value ? 600 : 400,
           transition: "all 0.15s",
         }}>
@@ -288,12 +338,13 @@ function FilterPills({ options, value, onChange }) {
 }
 
 function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegionStats, feedsByCompany, loading }) {
+  const C = useContext(ThemeContext);
   const [dailyDays,   setDailyDays]   = useState(30);
   const [monthsCount, setMonthsCount] = useState(6);
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 13 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 13 }}>
         завантаження…
       </div>
     );
@@ -352,10 +403,10 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
         ].map(({ key, label, sub }) => (
           <Card key={key} style={{ padding: "22px 26px" }}>
             <Label>{label}</Label>
-            <div style={{ fontSize: 62, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.orange, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+            <div style={{ fontSize: 62, fontWeight: 700, fontFamily: "'Lun', sans-serif", color: C.orange, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
               {feedsKpi[key] || 0}
             </div>
-            <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>{sub}</div>
+            <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>{sub}</div>
           </Card>
         ))}
       </div>
@@ -390,10 +441,10 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
             <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6 }}>
               <PctRing value={pct} color={color} size={88} />
               <div>
-                <div style={{ fontSize: 38, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 38, fontWeight: 700, fontFamily: "'Lun', sans-serif", color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
                   {num.toLocaleString("uk-UA")}
                 </div>
-                <div style={{ fontSize: 12, color: C.muted, fontFamily: "'DM Mono', monospace", marginTop: 5 }}>
+                <div style={{ fontSize: 12, color: C.muted, fontFamily: "'Lun Mono', monospace", marginTop: 5 }}>
                   із {total.toLocaleString("uk-UA")}
                 </div>
                 <div style={{ fontSize: 10, color: C.muted, marginTop: 3, maxWidth: 160, lineHeight: 1.4 }}>{sub}</div>
@@ -421,17 +472,22 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
         <div style={{ height: 250 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dailyData} barCategoryGap="22%" margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
-              <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false}
                 tickFormatter={v => v.toLocaleString("uk-UA")} domain={[dailyMin, "auto"]} width={65} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="count" fill={C.orange} radius={[4,4,0,0]} name="Квартири">
-                <LabelList dataKey="count" position="top"
-                  style={{ fill: C.text, fontSize: 10, fontFamily: "'DM Mono', monospace" }}
-                  formatter={v => v.toLocaleString("uk-UA")} />
+                {dailyDays <= 14 && (
+                  <LabelList dataKey="count" position="top"
+                    style={{ fill: C.text, fontSize: 10, fontFamily: "'Lun Mono', monospace" }}
+                    formatter={v => v.toLocaleString("uk-UA")} />
+                )}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
+          {dailyDays > 14 ? "Значення — при наведенні на стовпчик" : ""}
         </div>
       </Card>
 
@@ -449,10 +505,10 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
                 <div style={{ flex: 1, height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
                   <div style={{ width: `${r.pct}%`, height: "100%", background: pctColor(r.pct), borderRadius: 3, transition: "width 0.8s ease" }} />
                 </div>
-                <div style={{ width: 38, fontSize: 11, fontFamily: "'DM Mono', monospace", color: pctColor(r.pct), textAlign: "right", flexShrink: 0, fontWeight: 700 }}>
+                <div style={{ width: 38, fontSize: 11, fontFamily: "'Lun Mono', monospace", color: pctColor(r.pct), textAlign: "right", flexShrink: 0, fontWeight: 700 }}>
                   {r.pct}%
                 </div>
-                <div style={{ width: 58, fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, textAlign: "right", flexShrink: 0 }}>
+                <div style={{ width: 58, fontSize: 10, fontFamily: "'Lun Mono', monospace", color: C.muted, textAlign: "right", flexShrink: 0 }}>
                   {r.hasFeed}/{r.total}
                 </div>
               </div>
@@ -460,7 +516,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
           </div>
           <div style={{ display: "flex", gap: 16, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
             {[[C.orange,"≥25%"], [C.yellow,"10–25%"], [C.muted,"<10%"]].map(([color, label]) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.muted, fontFamily: "'DM Mono', monospace" }}>
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />{label}
               </div>
             ))}
@@ -478,7 +534,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
                 <div style={{ flex: 1, height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
                   <div style={{ width: `${Math.round(r.count / maxCount * 100)}%`, height: "100%", background: C.orange, borderRadius: 3, transition: "width 0.8s ease" }} />
                 </div>
-                <div style={{ width: 38, fontSize: 11, fontFamily: "'DM Mono', monospace", color: C.orange, textAlign: "right", flexShrink: 0, fontWeight: 700 }}>
+                <div style={{ width: 38, fontSize: 11, fontFamily: "'Lun Mono', monospace", color: C.orange, textAlign: "right", flexShrink: 0, fontWeight: 700 }}>
                   {r.count}
                 </div>
               </div>
@@ -496,7 +552,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
               <thead>
                 <tr>
                   {["Регіон", "Available у фідах", "Всього в ЖК з фідами", "Всього в продажу", "% в ЖК з фідами", "% available у фідах"].map(h => (
-                    <th key={h} style={{ textAlign: h === "Регіон" ? "left" : "right", padding: "6px 12px", color: C.muted, fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+                    <th key={h} style={{ textAlign: h === "Регіон" ? "left" : "right", padding: "6px 12px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -515,16 +571,16 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
                         <div style={{ width: 50, height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
                           <div style={{ width: `${Math.min(100, parseFloat(val))}%`, height: "100%", background: color, borderRadius: 2 }} />
                         </div>
-                        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color, fontWeight: 600, minWidth: 38, textAlign: "right" }}>{val}%</span>
+                        <span style={{ fontFamily: "'Lun Mono', monospace", fontSize: 12, color, fontWeight: 600, minWidth: 38, textAlign: "right" }}>{val}%</span>
                       </div>
                     </td>
                   );
                   return (
                     <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
                       <td style={{ padding: "9px 12px", fontWeight: 600, color: C.text }}>{row[0]}</td>
-                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.orange }}>{available.toLocaleString("uk-UA")}</td>
-                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.text }}>{withFeeds.toLocaleString("uk-UA")}</td>
-                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: C.text }}>{forSale.toLocaleString("uk-UA")}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'Lun Mono', monospace", color: C.orange }}>{available.toLocaleString("uk-UA")}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'Lun Mono', monospace", color: C.text }}>{withFeeds.toLocaleString("uk-UA")}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "right", fontFamily: "'Lun Mono', monospace", color: C.text }}>{forSale.toLocaleString("uk-UA")}</td>
                       {pctCell(pctInFeeds, pctInFeedsColor)}
                       {pctCell(pctAvail,   pctAvailColor)}
                     </tr>
@@ -538,7 +594,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
 
       {/* ROW 5 — По місяцях */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, fontFamily: "'DM Mono', monospace" }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
           Фіди по типу додавання
         </div>
         <FilterPills
@@ -557,11 +613,11 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
           <div style={{ marginTop: 14, height: 190 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthData} barCategoryGap="25%" margin={{ top: 24 }}>
-                <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="від забудовника" fill={C.orange} radius={[4,4,0,0]}>
-                  <LabelList dataKey="від забудовника" position="top" style={{ fill: C.text, fontSize: 12, fontFamily: "'DM Mono', monospace", fontWeight: 600 }} />
+                  <LabelList dataKey="від забудовника" position="top" style={{ fill: C.text, fontSize: 12, fontFamily: "'Lun Mono', monospace", fontWeight: 600 }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -572,11 +628,11 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
           <div style={{ marginTop: 14, height: 190 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthData} barCategoryGap="25%" margin={{ top: 24 }}>
-                <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="вручну" fill={C.orange} radius={[4,4,0,0]}>
-                  <LabelList dataKey="вручну" position="top" style={{ fill: C.text, fontSize: 12, fontFamily: "'DM Mono', monospace", fontWeight: 600 }} />
+                  <LabelList dataKey="вручну" position="top" style={{ fill: C.text, fontSize: 12, fontFamily: "'Lun Mono', monospace", fontWeight: 600 }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -597,7 +653,7 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
           <Card>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <Label style={{ marginBottom: 0 }}>Компанії-розробники фідів</Label>
-              <div style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: C.muted }}>
+              <div style={{ fontSize: 11, fontFamily: "'Lun Mono', monospace", color: C.muted }}>
                 всього фідів: <span style={{ color: C.text, fontWeight: 700 }}>{totalCompany}</span> · увімкнені
               </div>
             </div>
@@ -615,10 +671,10 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
                     <div style={{ flex: 1, height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
                       <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width 0.8s ease" }} />
                     </div>
-                    <div style={{ width: 32, fontSize: 12, fontFamily: "'DM Mono', monospace", color, fontWeight: 700, textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ width: 32, fontSize: 12, fontFamily: "'Lun Mono', monospace", color, fontWeight: 700, textAlign: "right", flexShrink: 0 }}>
                       {r.count}
                     </div>
-                    <div style={{ width: 34, fontSize: 10, fontFamily: "'DM Mono', monospace", color: C.muted, textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ width: 34, fontSize: 10, fontFamily: "'Lun Mono', monospace", color: C.muted, textAlign: "right", flexShrink: 0 }}>
                       {pctOfTotal}%
                     </div>
                   </div>
@@ -635,10 +691,11 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
 // ============================================================
 // ВКЛАДКА RINGOSTAT
 // ============================================================
-const RINGO_PURPLE = "a855f7";
-const RINGO_BLUE   = "3b82f6";
+const RINGO_PREMIUM = "9b4a8f";
+const RINGO_BASIC   = "fb8b54";
 
 function MonthSelect({ months, value, onChange }) {
+  const C = useContext(ThemeContext);
   const UA_MONTHS_FULL = ["Січень","Лютий","Березень","Квітень","Травень","Червень","Липень","Серпень","Вересень","Жовтень","Листопад","Грудень"];
   function labelFor(ym) {
     if (!ym) return ym;
@@ -652,7 +709,7 @@ function MonthSelect({ months, value, onChange }) {
       style={{
         background: C.surface, color: C.text, border: `1px solid ${C.border}`,
         borderRadius: 8, padding: "7px 14px", fontSize: 13,
-        fontFamily: "'DM Mono', monospace", cursor: "pointer", outline: "none",
+        fontFamily: "'Lun Mono', monospace", cursor: "pointer", outline: "none",
       }}
     >
       {months.map(m => <option key={m} value={m}>{labelFor(m)}</option>)}
@@ -661,7 +718,8 @@ function MonthSelect({ months, value, onChange }) {
 }
 
 function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
-  const months = [...new Set((ringoKpiAll.data || []).map(r => r[0]))].filter(Boolean).sort().reverse();
+  const C = useContext(ThemeContext);
+  const months = [...new Set((ringoKpiAll.data || []).map(r => r[0]))].filter(Boolean).sort((a, b) => monthKey(b) - monthKey(a));
   const [selectedMonth, setSelectedMonth] = useState(() => months[0] || "");
 
   // Sync selectedMonth if data arrives after initial render
@@ -671,7 +729,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
 
   if (loading) {
     return (
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:400, color:C.muted, fontFamily:"'DM Mono', monospace", fontSize:13 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:400, color:C.muted, fontFamily:"'Lun Mono', monospace", fontSize:13 }}>
         завантаження…
       </div>
     );
@@ -700,7 +758,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
 
   // Дані по всіх місяцях для графіків трендів (не фільтруємо по місяцю)
   const allMonthsData = [...(ringoKpiAll.data || [])]
-    .sort((a, b) => (a[0] || "").localeCompare(b[0] || ""))
+    .sort((a, b) => monthKey(a[0]) - monthKey(b[0]))
     .map(r => ({
       month:      formatMonth(r[0]),
       km:         parseInt(r[5]) || 0,
@@ -710,8 +768,8 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
     }));
 
   const pieData = [
-    { name: "Premium", value: premium, color: "#" + RINGO_PURPLE },
-    { name: "Basic",   value: basic,   color: "#" + RINGO_BLUE   },
+    { name: "Premium", value: premium, color: "#" + RINGO_PREMIUM },
+    { name: "Basic",   value: basic,   color: "#" + RINGO_BASIC   },
   ];
 
   return (
@@ -719,7 +777,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
 
       {/* Заголовок з вибором місяця */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase", color:C.muted, fontFamily:"'DM Mono', monospace" }}>
+        <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase", color:C.muted, fontFamily:"'Lun Mono', monospace" }}>
           Дзвінки Ringostat
         </div>
         {months.length > 0 && (
@@ -733,10 +791,10 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         {/* Загальна кількість */}
         <Card>
           <Label>Всього дзвінків</Label>
-          <div style={{ fontSize:56, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:C.text, lineHeight:1, letterSpacing:"-0.02em", fontVariantNumeric:"tabular-nums" }}>
+          <div style={{ fontSize:56, fontWeight:700, fontFamily:"'Lun', sans-serif", color:C.text, lineHeight:1, letterSpacing:"-0.02em", fontVariantNumeric:"tabular-nums" }}>
             {total.toLocaleString("uk-UA")}
           </div>
-          <div style={{ marginTop:10, fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>
+          <div style={{ marginTop:10, fontSize:11, color:C.muted, fontFamily:"'Lun Mono', monospace" }}>
             усі дзвінки за місяць
           </div>
         </Card>
@@ -747,7 +805,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
           <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:4 }}>
             <PctRing value={missedPct} color={C.red} />
             <div>
-              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:C.red, fontVariantNumeric:"tabular-nums" }}>
+              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Lun', sans-serif", color:C.red, fontVariantNumeric:"tabular-nums" }}>
                 {missed.toLocaleString("uk-UA")}
               </div>
               <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>
@@ -762,9 +820,9 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         <Card>
           <Label>Premium дзвінки</Label>
           <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:4 }}>
-            <PctRing value={total > 0 ? Math.round(premium/total*100) : 0} color={"#" + RINGO_PURPLE} />
+            <PctRing value={total > 0 ? Math.round(premium/total*100) : 0} color={"#" + RINGO_PREMIUM} />
             <div>
-              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:"#" + RINGO_PURPLE, fontVariantNumeric:"tabular-nums" }}>
+              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Lun', sans-serif", color:"#" + RINGO_PREMIUM, fontVariantNumeric:"tabular-nums" }}>
                 {premium.toLocaleString("uk-UA")}
               </div>
               <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>popularity = premium</div>
@@ -776,9 +834,9 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         <Card>
           <Label>Basic дзвінки</Label>
           <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:4 }}>
-            <PctRing value={total > 0 ? Math.round(basic/total*100) : 0} color={"#" + RINGO_BLUE} />
+            <PctRing value={total > 0 ? Math.round(basic/total*100) : 0} color={"#" + RINGO_BASIC} />
             <div>
-              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:"#" + RINGO_BLUE, fontVariantNumeric:"tabular-nums" }}>
+              <div style={{ fontSize:26, fontWeight:700, fontFamily:"'Lun', sans-serif", color:"#" + RINGO_BASIC, fontVariantNumeric:"tabular-nums" }}>
                 {basic.toLocaleString("uk-UA")}
               </div>
               <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>popularity = basic</div>
@@ -793,12 +851,12 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         <div style={{ marginTop:14, height:220 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={allMonthsData} barCategoryGap="30%" margin={{ top:20, right:8, left:0, bottom:0 }}>
-              <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="total" name="Дзвінків" fill={C.accent} radius={[4,4,0,0]}>
                 <LabelList dataKey="total" position="top"
-                  style={{ fill:C.text, fontSize:11, fontFamily:"'DM Mono', monospace", fontWeight:600 }}
+                  style={{ fill:C.text, fontSize:11, fontFamily:"'Lun Mono', monospace", fontWeight:600 }}
                   formatter={v => v.toLocaleString("uk-UA")} />
               </Bar>
             </BarChart>
@@ -816,25 +874,25 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" paddingAngle={3}>
                   {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
-                <Tooltip formatter={(v) => v.toLocaleString("uk-UA")} contentStyle={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"'DM Mono', monospace", fontSize:12 }} />
+                <Tooltip formatter={(v) => v.toLocaleString("uk-UA")} contentStyle={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"'Lun Mono', monospace", fontSize:12 }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
           <div style={{ display:"flex", gap:40 }}>
             {[
-              { label:"Premium", value:premium, pct: total>0?Math.round(premium/total*100):0, color:"#"+RINGO_PURPLE },
-              { label:"Basic",   value:basic,   pct: total>0?Math.round(basic/total*100):0,   color:"#"+RINGO_BLUE   },
+              { label:"Premium", value:premium, pct: total>0?Math.round(premium/total*100):0, color:"#"+RINGO_PREMIUM },
+              { label:"Basic",   value:basic,   pct: total>0?Math.round(basic/total*100):0,   color:"#"+RINGO_BASIC   },
               { label:"Пропущені", value:missed, pct: missedPct, color:C.red },
             ].map(item => (
               <div key={item.label}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                   <div style={{ width:10, height:10, borderRadius:"50%", background:item.color }} />
-                  <span style={{ fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>{item.label}</span>
+                  <span style={{ fontSize:11, color:C.muted, fontFamily:"'Lun Mono', monospace" }}>{item.label}</span>
                 </div>
-                <div style={{ fontSize:32, fontWeight:700, fontFamily:"'Space Grotesk', sans-serif", color:item.color, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>
+                <div style={{ fontSize:32, fontWeight:700, fontFamily:"'Lun', sans-serif", color:item.color, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>
                   {item.value.toLocaleString("uk-UA")}
                 </div>
-                <div style={{ fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace", marginTop:4 }}>{item.pct}%</div>
+                <div style={{ fontSize:11, color:C.muted, fontFamily:"'Lun Mono', monospace", marginTop:4 }}>{item.pct}%</div>
               </div>
             ))}
           </div>
@@ -848,11 +906,11 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
           <div style={{ marginTop:14, height:220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={allMonthsData} barCategoryGap="30%" margin={{ top:20, right:8, left:0, bottom:0 }}>
-                <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="km" name="КМ дзвінки" fill={C.green} radius={[4,4,0,0]}>
-                  <LabelList dataKey="km" position="top" style={{ fill:C.text, fontSize:11, fontFamily:"'DM Mono', monospace", fontWeight:600 }} />
+                  <LabelList dataKey="km" position="top" style={{ fill:C.text, fontSize:11, fontFamily:"'Lun Mono', monospace", fontWeight:600 }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -864,11 +922,11 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
           <div style={{ marginTop:14, height:220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={allMonthsData} barCategoryGap="30%" margin={{ top:20, right:8, left:0, bottom:0 }}>
-                <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="month" tick={{ fill:C.muted, fontSize:10, fontFamily:"'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} allowDecimals={false} tickFormatter={v => v + "%"} domain={[0, 100]} />
-                <Tooltip formatter={(v) => v + "%"} contentStyle={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"'DM Mono', monospace", fontSize:12 }} />
+                <Tooltip formatter={(v) => v + "%"} contentStyle={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"'Lun Mono', monospace", fontSize:12 }} />
                 <Bar dataKey="missedPct" name="Пропущені %" fill={C.red} radius={[4,4,0,0]}>
-                  <LabelList dataKey="missedPct" position="top" style={{ fill:C.text, fontSize:11, fontFamily:"'DM Mono', monospace", fontWeight:600 }} formatter={v => v + "%"} />
+                  <LabelList dataKey="missedPct" position="top" style={{ fill:C.text, fontSize:11, fontFamily:"'Lun Mono', monospace", fontWeight:600 }} formatter={v => v + "%"} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -883,21 +941,21 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
           <div style={{ marginTop:14, height:260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={regionData} barCategoryGap="28%" margin={{ top:8, right:8, left:0, bottom:0 }}>
-                <XAxis dataKey="region" tick={{ fill:C.muted, fontSize:10, fontFamily:"'DM Mono', monospace" }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="region" tick={{ fill:C.muted, fontSize:10, fontFamily:"'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="basic"   name="Basic"   fill={"#"+RINGO_BLUE}   radius={[0,0,0,0]} stackId="a" />
-                <Bar dataKey="premium" name="Premium" fill={"#"+RINGO_PURPLE} radius={[3,3,0,0]} stackId="a">
+                <Bar dataKey="basic"   name="Basic"   fill={"#"+RINGO_BASIC}   radius={[0,0,0,0]} stackId="a" />
+                <Bar dataKey="premium" name="Premium" fill={"#"+RINGO_PREMIUM} radius={[3,3,0,0]} stackId="a">
                   <LabelList dataKey="total" position="top"
-                    style={{ fill:C.muted, fontSize:9, fontFamily:"'DM Mono', monospace" }}
+                    style={{ fill:C.muted, fontSize:9, fontFamily:"'Lun Mono', monospace" }}
                     formatter={v => v > 0 ? v.toLocaleString("uk-UA") : ""} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
           <div style={{ display:"flex", gap:20, marginTop:8 }}>
-            {[["#"+RINGO_BLUE,"Basic"], ["#"+RINGO_PURPLE,"Premium"]].map(([color, label]) => (
-              <div key={label} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:C.muted, fontFamily:"'DM Mono', monospace" }}>
+            {[["#"+RINGO_BASIC,"Basic"], ["#"+RINGO_PREMIUM,"Premium"]].map(([color, label]) => (
+              <div key={label} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:C.muted, fontFamily:"'Lun Mono', monospace" }}>
                 <div style={{ width:10, height:10, borderRadius:2, background:color }} />{label}
               </div>
             ))}
@@ -910,7 +968,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         <Card>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
             <Label>КМ — дзвінки по ЖК (Premium cottage)</Label>
-            <div style={{ fontSize:12, fontFamily:"'DM Mono', monospace", color:C.green, background:"#1a2d1a", padding:"3px 10px", borderRadius:6 }}>
+            <div style={{ fontSize:12, fontFamily:"'Lun Mono', monospace", color:C.green, background:"#1a2d1a", padding:"3px 10px", borderRadius:6 }}>
               {kmData.length} КМ
             </div>
           </div>
@@ -919,7 +977,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
               <thead>
                 <tr>
                   {["#", "Назва КМ", "Регіон", "Дзвінків"].map(h => (
-                    <th key={h} style={{ textAlign: h==="Дзвінків" ? "right" : "left", padding:"6px 10px", color:C.muted, fontFamily:"'DM Mono', monospace", fontSize:10, letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:`1px solid ${C.border}`, fontWeight:600 }}>
+                    <th key={h} style={{ textAlign: h==="Дзвінків" ? "right" : "left", padding:"6px 10px", color:C.muted, fontFamily:"'Lun Mono', monospace", fontSize:10, letterSpacing:"0.06em", textTransform:"uppercase", borderBottom:`1px solid ${C.border}`, fontWeight:600 }}>
                       {h}
                     </th>
                   ))}
@@ -931,7 +989,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
                   const pct = Math.round(row.calls / maxCalls * 100);
                   return (
                     <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
-                      <td style={{ padding:"9px 10px", color:C.muted, fontFamily:"'DM Mono', monospace", fontSize:11, width:32 }}>{i+1}</td>
+                      <td style={{ padding:"9px 10px", color:C.muted, fontFamily:"'Lun Mono', monospace", fontSize:11, width:32 }}>{i+1}</td>
                       <td style={{ padding:"9px 10px", fontWeight:600, color:C.text }}>{row.name}</td>
                       <td style={{ padding:"9px 10px", color:C.muted, fontSize:12 }}>{row.region}</td>
                       <td style={{ padding:"9px 10px", textAlign:"right" }}>
@@ -939,7 +997,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
                           <div style={{ width:80, height:4, background:C.border, borderRadius:2, overflow:"hidden" }}>
                             <div style={{ width:`${pct}%`, height:"100%", background:C.green, borderRadius:2 }} />
                           </div>
-                          <span style={{ fontFamily:"'DM Mono', monospace", fontWeight:700, color:C.green, minWidth:40, textAlign:"right" }}>
+                          <span style={{ fontFamily:"'Lun Mono', monospace", fontWeight:700, color:C.green, minWidth:40, textAlign:"right" }}>
                             {row.calls.toLocaleString("uk-UA")}
                           </span>
                         </div>
@@ -958,19 +1016,191 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
 }
 
 // ============================================================
-// ЗАГЛУШКА
+// ВКЛАДКА LAYOUTS (планування)
 // ============================================================
-function ComingSoon({ name }) {
+function CoverageCard({ label, without, total, sub }) {
+  const C = useContext(ThemeContext);
+  const pct = total > 0 ? Math.round((without / total) * 100) : 0;
+  const color = pct >= 30 ? C.red : pct >= 15 ? C.yellow : C.green;
+  const withCount = Math.max(total - without, 0);
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 16 }}>
-      <div style={{ fontSize: 48, opacity: 0.2 }}>⚙</div>
-      <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800, color: C.muted }}>{name}</div>
-      <div style={{ fontSize: 14, color: C.muted, fontFamily: "'DM Mono', monospace", textAlign: "center", maxWidth: 320, lineHeight: 1.8 }}>
-        Розділ у розробці.<br />Підключимо коли будуть дані з Google Sheets.
+    <Card>
+      <Label>{label}</Label>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
+        <PctRing value={pct} color={color} />
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Lun', sans-serif", color, fontVariantNumeric: "tabular-nums" }}>
+            {without.toLocaleString("uk-UA")}<span style={{ fontSize: 13, color: C.muted, fontWeight: 400 }}>/{total.toLocaleString("uk-UA")}</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>без планувань · {sub}</div>
+          <div style={{ fontSize: 10, color: C.green, marginTop: 2 }}>з плануванням: {withCount.toLocaleString("uk-UA")}</div>
+        </div>
       </div>
-      <div style={{ marginTop: 8, padding: "8px 20px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, color: C.muted, fontFamily: "'DM Mono', monospace" }}>
-        coming soon
+    </Card>
+  );
+}
+
+function BuildingsMissingTable({ title, rows, defaultOpen = true }) {
+  const C = useContext(ThemeContext);
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: open ? 12 : 0, cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: C.muted, fontSize: 11, transition: "transform 0.2s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>▸</span>
+          <Label style={{ marginBottom: 0 }}>{title}</Label>
+        </div>
+        <div style={{ fontSize: 12, fontFamily: "'Lun Mono', monospace", color: C.orange, background: "rgba(249,115,22,0.12)", padding: "3px 10px", borderRadius: 6 }}>
+          {rows.length} ЖК
+        </div>
       </div>
+      {open && (
+        rows.length === 0 ? (
+          <div style={{ padding: "20px", textAlign: "center", color: C.green, fontFamily: "'Lun Mono', monospace", fontSize: 13 }}>
+            ✓ Усі будинки мають планування
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  {["ЖК", "Регіон", "Будинків без планувань", "Всього будинків", "%"].map(h => (
+                    <th key={h} style={{ textAlign: (h === "ЖК" || h === "Регіон") ? "left" : "right", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => {
+                  const pct = r.total > 0 ? Math.round((r.without / r.total) * 100) : 0;
+                  const pctColor = pct >= 75 ? C.red : pct >= 40 ? C.yellow : C.muted;
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: "10px", fontWeight: 600, color: C.text }}>{r.name}</td>
+                      <td style={{ padding: "10px", color: C.muted }}>{r.region}</td>
+                      <td style={{ padding: "10px", textAlign: "right", color: C.text, fontFamily: "'Lun Mono', monospace" }}>{r.without}</td>
+                      <td style={{ padding: "10px", textAlign: "right", color: C.muted, fontFamily: "'Lun Mono', monospace" }}>{r.total}</td>
+                      <td style={{ padding: "10px", textAlign: "right", color: pctColor, fontFamily: "'Lun Mono', monospace", fontWeight: 700 }}>{pct}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+    </Card>
+  );
+}
+
+function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildings, loading }) {
+  const C = useContext(ThemeContext);
+  const [monthsCount, setMonthsCount] = useState(6);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 13 }}>
+        завантаження…
+      </div>
+    );
+  }
+
+  const n = v => parseInt(layoutsCoverage[v]) || 0;
+  const km = v => parseInt(layoutsKM[v]) || 0;
+
+  const monthData = layoutsMonthly.data.slice(-monthsCount).map(r => ({
+    month: formatMonth(r[0]),
+    count: parseInt(r[1]) || 0,
+  }));
+
+  const kmTotal = km("km_total");
+  const kmMissing = km("km_missing");
+  const kmAdded = Math.max(kmTotal - kmMissing, 0);
+  const kmPct = kmTotal > 0 ? Math.round((kmAdded / kmTotal) * 100) : 0;
+  const kmColor = kmPct >= 75 ? C.green : kmPct >= 50 ? C.yellow : C.red;
+
+  const buildingsRows = layoutsBuildings.data.map(r => ({
+    name: r[0] || "",
+    region: r[1] || "",
+    status: (r[2] || "").toLowerCase(),
+    without: parseInt(r[3]) || 0,
+    total: parseInt(r[4]) || 0,
+  }));
+  const premiumRows = buildingsRows.filter(r => r.status === "premium");
+  const basicRows = buildingsRows.filter(r => r.status !== "premium");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* ROW 1 — покриття плануваннями */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        <CoverageCard label="ЖК без планувань" without={n("buildings_without")} total={n("buildings_total")} sub="активні ЖК" />
+        <CoverageCard label="Черги без планувань" without={n("queues_without")} total={n("queues_total")} sub="активні черги" />
+        <CoverageCard label="Будинки без планувань" without={n("sections_without")} total={n("sections_total")} sub="активні будинки" />
+      </div>
+
+      {/* ROW 1.5 — ЖК з будинками без планувань */}
+      <BuildingsMissingTable title="Premium ЖК — є будинки без планувань" rows={premiumRows} defaultOpen={true} />
+      <BuildingsMissingTable title="Basic ЖК — є будинки без планувань" rows={basicRows} defaultOpen={false} />
+
+      {/* ROW 2 — КМ типові проєкти */}
+      <Card>
+        <Label>Типові проєкти КМ (планування додано)</Label>
+        <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6 }}>
+          <PctRing value={kmPct} color={kmColor} size={88} />
+          <div>
+            <div style={{ fontSize: 38, fontWeight: 700, fontFamily: "'Lun', sans-serif", color: kmColor, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+              {kmAdded.toLocaleString("uk-UA")}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, fontFamily: "'Lun Mono', monospace", marginTop: 5 }}>
+              із {kmTotal.toLocaleString("uk-UA")} типових проєктів
+            </div>
+            <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>
+              без фото і без планування: {kmMissing.toLocaleString("uk-UA")}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* ROW 3 — Планувань додано по місяцях */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <Label style={{ marginBottom: 0 }}>Кількість планувань квартир додано</Label>
+          <FilterPills
+            value={monthsCount}
+            onChange={setMonthsCount}
+            options={[
+              { label: "6 міс",  value: 6  },
+              { label: "12 міс", value: 12 },
+              { label: "24 міс", value: 24 },
+              { label: "всі",    value: 999 },
+            ]}
+          />
+        </div>
+        <div style={{ height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthData} barCategoryGap="25%" margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} allowDecimals={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="count" name="Кількість планувань" fill={C.orange} radius={[4,4,0,0]}>
+                {monthData.length <= 14 && (
+                  <LabelList dataKey="count" position="top"
+                    style={{ fill: C.text, fontSize: 11, fontFamily: "'Lun Mono', monospace", fontWeight: 600 }}
+                    formatter={v => v.toLocaleString("uk-UA")} />
+                )}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        {monthData.length > 14 && (
+          <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
+            Значення — при наведенні на стовпчик
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
@@ -980,7 +1210,70 @@ function ComingSoon({ name }) {
 // ============================================================
 const TABS = ["Фіди", "Realbase", "Layouts", "Ringostat"];
 
-export default function Dashboard() {
+function inputStyle(C) {
+  return {
+    width: "100%", background: C.bg, color: C.text, border: `1px solid ${C.border}`,
+    borderRadius: 8, padding: "10px 12px", fontSize: 14, fontFamily: "'Lun', sans-serif",
+    outline: "none", boxSizing: "border-box",
+  };
+}
+
+function LoginScreen({ onSuccess }) {
+  const [dark] = useState(() => {
+    try { return localStorage.getItem("sm_theme") !== "light"; } catch { return true; }
+  });
+  const C = dark ? DARK : LIGHT;
+  const [login, setLogin]     = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr]         = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const ok = TEAM_USERS.some(u => u.login === login.trim() && u.password === password);
+    if (ok) {
+      try { localStorage.setItem(AUTH_KEY, "1"); } catch { /* noop */ }
+      onSuccess();
+    } else {
+      setErr("Невірний логін або пароль");
+    }
+  };
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Lun', sans-serif" }}>
+      <style>{`* { box-sizing: border-box; }`}</style>
+      <form onSubmit={handleSubmit} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "36px 32px", width: 320 }}>
+        <div style={{ fontFamily: "'Lun Display', sans-serif", fontSize: 20, fontWeight: 900, color: C.text, marginBottom: 4 }}>Sales Monitoring</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 24 }}>Доступ тільки для команди</div>
+
+        <label style={{ display: "block", fontSize: 12, color: C.muted, marginBottom: 6 }}>Логін</label>
+        <input value={login} onChange={e => setLogin(e.target.value)} autoFocus style={inputStyle(C)} />
+
+        <label style={{ display: "block", fontSize: 12, color: C.muted, margin: "14px 0 6px" }}>Пароль</label>
+        <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle(C)} />
+
+        {err && <div style={{ marginTop: 12, fontSize: 12, color: C.red }}>{err}</div>}
+
+        <button type="submit" style={{ marginTop: 22, width: "100%", background: C.accent, color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          Увійти
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Dashboard({ onLogout }) {
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem("sm_theme") !== "light"; } catch { return true; }
+  });
+  const C = dark ? DARK : LIGHT;
+  const toggleTheme = () => {
+    setDark(d => {
+      const next = !d;
+      try { localStorage.setItem("sm_theme", next ? "dark" : "light"); } catch { /* noop */ }
+      return next;
+    });
+  };
+
   const [activeTab, setActiveTab] = useState("Фіди");
 
   // Flats data
@@ -1009,6 +1302,15 @@ export default function Dashboard() {
   const [ringoLoaded,      setRingoLoaded]      = useState(false);
   const [ringoLoading,     setRingoLoading]     = useState(false);
   const [ringoError,       setRingoError]       = useState(null);
+
+  // Layouts data
+  const [layoutsMonthly,  setLayoutsMonthly]  = useState({ headers: [], data: [] });
+  const [layoutsCoverage, setLayoutsCoverage] = useState({});
+  const [layoutsKM,       setLayoutsKM]       = useState({});
+  const [layoutsBuildings, setLayoutsBuildings] = useState({ headers: [], data: [] });
+  const [layoutsLoaded,   setLayoutsLoaded]   = useState(false);
+  const [layoutsLoading,  setLayoutsLoading]  = useState(false);
+  const [layoutsError,    setLayoutsError]    = useState(null);
 
   const isDemo = API_KEY.includes("ВСТАВТЕ");
 
@@ -1110,6 +1412,27 @@ export default function Dashboard() {
     }
   }, [isDemo]);
 
+  const fetchLayoutsData = useCallback(async () => {
+    if (isDemo) return;
+    setLayoutsLoading(true);
+    setLayoutsError(null);
+    try {
+      const [r1, r2, r3, r4] = await Promise.all([
+        fetch(LAYOUTS_MONTHLY_URL), fetch(LAYOUTS_COVERAGE_URL), fetch(LAYOUTS_KM_URL), fetch(LAYOUTS_BUILDINGS_URL),
+      ]);
+      const [j1, j2, j3, j4] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json()]);
+      setLayoutsMonthly(parseTable(j1.values));
+      setLayoutsCoverage(parseKPI(j2.values));
+      setLayoutsKM(parseKPI(j3.values));
+      setLayoutsBuildings(parseTable(j4.values));
+      setLayoutsLoaded(true);
+    } catch {
+      setLayoutsError("Не вдалося завантажити дані по плануваннях.");
+    } finally {
+      setLayoutsLoading(false);
+    }
+  }, [isDemo]);
+
   // Lazy load feeds when tab is first opened
   useEffect(() => {
     if (activeTab === "Фіди" && !feedsLoaded && !isDemo) {
@@ -1124,10 +1447,17 @@ export default function Dashboard() {
     }
   }, [activeTab, ringoLoaded, isDemo, fetchRingoData]);
 
+  // Lazy load layouts when tab is first opened
+  useEffect(() => {
+    if (activeTab === "Layouts" && !layoutsLoaded && !isDemo) {
+      fetchLayoutsData();
+    }
+  }, [activeTab, layoutsLoaded, isDemo, fetchLayoutsData]);
+
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", color: C.text, fontFamily: "'DM Sans', sans-serif", paddingBottom: 48 }}>
+    <ThemeContext.Provider value={C}>
+    <div style={{ background: C.bg, minHeight: "100vh", color: C.text, fontFamily: "'Lun', sans-serif", paddingBottom: 48 }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         .fade { animation: fadeUp 0.45s ease both; }
@@ -1137,7 +1467,7 @@ export default function Dashboard() {
       `}</style>
       {/* Animated background orbs */}
       <div style={{ position:"fixed", inset:0, overflow:"hidden", pointerEvents:"none", zIndex:0 }}>
-        <div style={{ position:"absolute", width:700, height:700, borderRadius:"50%", background:"radial-gradient(circle, rgba(88,166,255,0.07) 0%, transparent 70%)", top:-200, left:-150, animation:"orbFloat1 16s ease-in-out infinite" }} />
+        <div style={{ position:"absolute", width:700, height:700, borderRadius:"50%", background:"radial-gradient(circle, rgba(155,74,143,0.09) 0%, transparent 70%)", top:-200, left:-150, animation:"orbFloat1 16s ease-in-out infinite" }} />
         <div style={{ position:"absolute", width:550, height:550, borderRadius:"50%", background:"radial-gradient(circle, rgba(249,115,22,0.07) 0%, transparent 70%)", bottom:"-5%", right:"-5%", animation:"orbFloat2 20s ease-in-out infinite" }} />
         <div style={{ position:"absolute", width:400, height:400, borderRadius:"50%", background:"radial-gradient(circle, rgba(63,185,80,0.05) 0%, transparent 70%)", top:"40%", left:"40%", animation:"orbFloat3 13s ease-in-out infinite" }} />
       </div>
@@ -1148,43 +1478,53 @@ export default function Dashboard() {
         <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
           <div style={{ display: "flex", alignItems: "center", paddingRight: 32, borderRight: `1px solid ${C.border}` }}>
             <div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
+              <div style={{ fontFamily: "'Lun Display', sans-serif", fontSize: 18, fontWeight: 900, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
                 Sales Monitoring
               </div>
-              <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Mono', monospace" }}>
+              <div style={{ fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
                 {isDemo ? "demo" : kpi.period || ""}
                 {lastUpd && ` · ${lastUpd.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`}
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "stretch", marginLeft: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", marginLeft: 20, gap: 4, background: dark ? "#0000002a" : "#0000000d", padding: 4, borderRadius: 10 }}>
             {TABS.map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                background: "none", border: "none",
-                borderBottom: activeTab === tab ? `2px solid ${C.accent}` : "2px solid transparent",
-                color: activeTab === tab ? C.text : C.muted, fontFamily: "'DM Sans', sans-serif",
-                fontSize: 14, fontWeight: activeTab === tab ? 600 : 400,
-                padding: "18px 20px", cursor: "pointer", transition: "all 0.2s",
+                background: activeTab === tab ? C.surface : "none",
+                border: activeTab === tab ? `1px solid ${C.border}` : "1px solid transparent",
+                borderRadius: 7,
+                color: activeTab === tab ? C.text : C.muted, fontFamily: "'Lun', sans-serif",
+                fontSize: 13, fontWeight: activeTab === tab ? 600 : 500,
+                letterSpacing: "0.02em",
+                padding: "9px 16px", cursor: "pointer", transition: "all 0.2s",
                 display: "flex", alignItems: "center", gap: 6,
               }}>
-                {tab}
-                {tab === "Layouts" && (
-                  <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.border, color: C.muted, fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em" }}>
-                    soon
-                  </span>
-                )}
+                {tab.toUpperCase()}
               </button>
             ))}
           </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={toggleTheme} style={{
+            background: "none", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8,
+            padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "'Lun', sans-serif",
+            display: "flex", alignItems: "center", gap: 6,
+          }}>
+            {dark ? "☀ Light mode" : "🌙 Dark mode"}
+          </button>
+          <button onClick={onLogout} style={{
+            background: "none", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8,
+            padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "'Lun', sans-serif",
+          }}>
+            Вийти
+          </button>
           {activeTab === "Фіди" && feedsLoaded && (
             <button onClick={fetchFeedsData} disabled={feedsLoading || isDemo} style={{
               background: "none", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8,
               padding: "8px 14px", fontSize: 13, cursor: feedsLoading || isDemo ? "not-allowed" : "pointer",
-              opacity: feedsLoading || isDemo ? 0.5 : 1, fontFamily: "'DM Sans', sans-serif",
+              opacity: feedsLoading || isDemo ? 0.5 : 1, fontFamily: "'Lun', sans-serif",
             }}>
               {feedsLoading ? "…" : "↻"}
             </button>
@@ -1193,25 +1533,34 @@ export default function Dashboard() {
             <button onClick={fetchRingoData} disabled={ringoLoading || isDemo} style={{
               background: "none", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8,
               padding: "8px 14px", fontSize: 13, cursor: ringoLoading || isDemo ? "not-allowed" : "pointer",
-              opacity: ringoLoading || isDemo ? 0.5 : 1, fontFamily: "'DM Sans', sans-serif",
+              opacity: ringoLoading || isDemo ? 0.5 : 1, fontFamily: "'Lun', sans-serif",
             }}>
               {ringoLoading ? "…" : "↻"}
+            </button>
+          )}
+          {activeTab === "Layouts" && layoutsLoaded && (
+            <button onClick={fetchLayoutsData} disabled={layoutsLoading || isDemo} style={{
+              background: "none", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8,
+              padding: "8px 14px", fontSize: 13, cursor: layoutsLoading || isDemo ? "not-allowed" : "pointer",
+              opacity: layoutsLoading || isDemo ? 0.5 : 1, fontFamily: "'Lun', sans-serif",
+            }}>
+              {layoutsLoading ? "…" : "↻"}
             </button>
           )}
           <button onClick={fetchData} disabled={loading || isDemo} style={{
             background: C.accent, color: "#fff", border: "none", borderRadius: 8,
             padding: "8px 18px", fontSize: 13, fontWeight: 600,
             cursor: loading || isDemo ? "not-allowed" : "pointer",
-            opacity: loading || isDemo ? 0.5 : 1, fontFamily: "'DM Sans', sans-serif",
+            opacity: loading || isDemo ? 0.5 : 1, fontFamily: "'Lun', sans-serif",
           }}>
             {loading ? "…" : "↻ Оновити"}
           </button>
         </div>
       </div>
 
-      {(error || feedsError || ringoError) && (
-        <div style={{ margin: "20px 36px", padding: "12px 18px", background: "#2d1b1b", border: `1px solid ${C.red}`, borderRadius: 10, color: C.red, fontSize: 13, fontFamily: "'DM Mono', monospace" }}>
-          ⚠ {error || feedsError || ringoError}
+      {(error || feedsError || ringoError || layoutsError) && (
+        <div style={{ margin: "20px 36px", padding: "12px 18px", background: dark ? "#2e150f" : "#fbe0da", border: `1px solid ${C.red}`, borderRadius: 10, color: C.red, fontSize: 13, fontFamily: "'Lun Mono', monospace" }}>
+          ⚠ {error || feedsError || ringoError || layoutsError}
         </div>
       )}
 
@@ -1219,9 +1568,30 @@ export default function Dashboard() {
       <div style={{ padding: "20px 20px", position: "relative", zIndex: 1 }}>
         {activeTab === "Realbase"  && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
         {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} feedsByCompany={feedsByCompany} loading={feedsLoading} />}
-        {activeTab === "Layouts"   && <ComingSoon name="Layouts" />}
+        {activeTab === "Layouts"   && <LayoutsTab layoutsMonthly={layoutsMonthly} layoutsCoverage={layoutsCoverage} layoutsKM={layoutsKM} layoutsBuildings={layoutsBuildings} loading={layoutsLoading} />}
         {activeTab === "Ringostat" && <RingostatTab ringoKpiAll={ringoKpiAll} ringoByRegionAll={ringoByRegionAll} ringoKmAll={ringoKmAll} loading={ringoLoading} />}
       </div>
     </div>
+    </ThemeContext.Provider>
+  );
+}
+
+// ============================================================
+// КОРІНЬ: перевірка авторизації
+// ============================================================
+export default function App() {
+  const [authed, setAuthed] = useState(() => {
+    try { return localStorage.getItem(AUTH_KEY) === "1"; } catch { return false; }
+  });
+
+  if (!authed) return <LoginScreen onSuccess={() => setAuthed(true)} />;
+
+  return (
+    <Dashboard
+      onLogout={() => {
+        try { localStorage.removeItem(AUTH_KEY); } catch { /* noop */ }
+        setAuthed(false);
+      }}
+    />
   );
 }
