@@ -84,7 +84,7 @@ function writeLayoutsCoverage(conn) {
         SELECT bq.queue_id
         FROM buildings_queues bq
         LEFT JOIN section s ON bq.queue_id = s.queue_id
-        LEFT JOIN layout l ON s.section_id = l.section_id
+        LEFT JOIN layout l ON s.house_id = l.house_id
         WHERE bq.developer_offer IN ('available', 'open_reservation')
         GROUP BY bq.queue_id
         HAVING COUNT(DISTINCT l.layout_id) = 0
@@ -95,20 +95,19 @@ function writeLayoutsCoverage(conn) {
        WHERE bq.developer_offer IN ('available', 'open_reservation')) AS queues_total,
 
       -- Будинки (секції) без планувань
-      -- ⚠️ Фільтр саме по статусу будинку (section), а не черги — щоб не тягнути
-      -- продані / не стартувавші будинки. Припущено, що в `section` є колонка
-      -- `developer_offer` (як у buildings/buildings_queues). Якщо назва інша — підставте свою.
+      -- Фільтр саме по статусу будинку (section), а не черги - щоб не тягнути
+      -- продані / не стартувавші будинки. Зв'язок section -> layout через house_id.
       (SELECT COUNT(*) FROM (
-        SELECT s.section_id
+        SELECT DISTINCT s.house_id
         FROM section s
-        LEFT JOIN layout l ON s.section_id = l.section_id
         WHERE s.developer_offer IN ('available', 'open_reservation')
-        GROUP BY s.section_id
-        HAVING COUNT(DISTINCT l.layout_id) = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM layout l WHERE l.house_id = s.house_id
+          )
       ) t3) AS sections_without,
 
       -- Всього будинків (секцій) (для %)
-      (SELECT COUNT(*) FROM section s
+      (SELECT COUNT(DISTINCT s.house_id) FROM section s
        WHERE s.developer_offer IN ('available', 'open_reservation')) AS sections_total,
 
       -- Бонус: планування без площі (з твого запиту) і всього планувань з контуром
@@ -191,11 +190,11 @@ function writeLayoutsBuildingsMissing(conn) {
     FROM buildings b
     INNER JOIN buildings_queues bq ON bq.building_id = b.building_id
     INNER JOIN (
-      SELECT s.section_id, s.queue_id, COUNT(l.layout_id) AS layout_count
+      SELECT s.house_id, s.queue_id, COUNT(l.layout_id) AS layout_count
       FROM section s
-      LEFT JOIN layout l ON l.section_id = s.section_id
+      LEFT JOIN layout l ON l.house_id = s.house_id
       WHERE s.developer_offer IN ('available', 'open_reservation')
-      GROUP BY s.section_id
+      GROUP BY s.house_id, s.queue_id
     ) sec ON sec.queue_id = bq.queue_id
     LEFT JOIN geo_regions gr ON gr.region_id = b.region_id
     WHERE b.building_type = 'new_building'
