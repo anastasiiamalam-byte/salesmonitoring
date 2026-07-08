@@ -227,7 +227,16 @@ function FlatsTab({ kpi, regions, highList }) {
       <Card>
         <Label>Деталі по регіонах</Label>
         <div style={{ marginTop: 12, overflowX: "auto" }}>
-          <table style={{ width: "100%", maxWidth: 1000, borderCollapse: "collapse", fontSize: 13 }}>
+          <table style={{ width: "100%", maxWidth: 820, margin: "0 auto", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 13 }}>
+            <colgroup>
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "13%" }} />
+            </colgroup>
             <thead>
               <tr>
                 {regions.headers.map(h => (
@@ -281,7 +290,15 @@ function FlatsTab({ kpi, regions, highList }) {
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", maxWidth: 1000, borderCollapse: "collapse", fontSize: 13 }}>
+              <table style={{ width: "100%", maxWidth: 900, margin: "0 auto", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 13 }}>
+                <colgroup>
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "28%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "16%" }} />
+                </colgroup>
                 <thead>
                   <tr>
                     {highList.headers.map(h => (
@@ -548,7 +565,15 @@ function FeedsTab({ feedsKpi, feedsDaily, feedsByRegion, feedsByMonth, feedsRegi
         <Card>
           <Label>Статистика квартир по регіонах</Label>
           <div style={{ marginTop: 12, overflowX: "auto" }}>
-            <table style={{ width: "100%", maxWidth: 1100, borderCollapse: "collapse", fontSize: 13 }}>
+            <table style={{ width: "100%", maxWidth: 880, margin: "0 auto", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 13 }}>
+              <colgroup>
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "17%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   {["Регіон", "Available у фідах", "Всього в ЖК з фідами", "Всього в продажу", "% в ЖК з фідами", "% available у фідах"].map(h => (
@@ -1092,7 +1117,14 @@ function BuildingsMissingTable({ title, rows, defaultOpen = true }) {
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", maxWidth: 1000, borderCollapse: "collapse", fontSize: 13 }}>
+            <table style={{ width: "100%", maxWidth: 820, margin: "0 auto", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 13 }}>
+              <colgroup>
+                <col style={{ width: "34%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "12%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   {["ЖК", "Регіон", "Будинків без планувань", "Всього будинків", "%"].map(h => (
