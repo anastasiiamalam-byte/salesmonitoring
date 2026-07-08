@@ -95,20 +95,21 @@ function writeLayoutsCoverage(conn) {
        WHERE bq.developer_offer IN ('available', 'open_reservation')) AS queues_total,
 
       -- Будинки (секції) без планувань
+      -- ⚠️ Фільтр саме по статусу будинку (section), а не черги — щоб не тягнути
+      -- продані / не стартувавші будинки. Припущено, що в `section` є колонка
+      -- `developer_offer` (як у buildings/buildings_queues). Якщо назва інша — підставте свою.
       (SELECT COUNT(*) FROM (
         SELECT s.section_id
         FROM section s
-        INNER JOIN buildings_queues bq ON s.queue_id = bq.queue_id
         LEFT JOIN layout l ON s.section_id = l.section_id
-        WHERE bq.developer_offer IN ('available', 'open_reservation')
+        WHERE s.developer_offer IN ('available', 'open_reservation')
         GROUP BY s.section_id
         HAVING COUNT(DISTINCT l.layout_id) = 0
       ) t3) AS sections_without,
 
       -- Всього будинків (секцій) (для %)
       (SELECT COUNT(*) FROM section s
-       INNER JOIN buildings_queues bq ON s.queue_id = bq.queue_id
-       WHERE bq.developer_offer IN ('available', 'open_reservation')) AS sections_total,
+       WHERE s.developer_offer IN ('available', 'open_reservation')) AS sections_total,
 
       -- Бонус: планування без площі (з твого запиту) і всього планувань з контуром
       (SELECT COUNT(*)
@@ -175,6 +176,9 @@ function writeLayoutsKM(conn) {
 // Список ЖК (premium і basic), у яких хоча б один будинок (секція) без планувань.
 // ⚠️ ПЕРЕВІРТЕ: назву колонки зв'язку buildings_queues → buildings.
 // Тут припущено, що в buildings_queues є колонка `building_id` (як у buildings).
+// ⚠️ ПЕРЕВІРТЕ: рахуються тільки будинки (section) зі статусом available/
+// open_reservation — тобто у продажі або бронюванні (не продані, не "coming soon").
+// Припущено, що в `section` є колонка `developer_offer` (як у buildings).
 // ============================================================
 function writeLayoutsBuildingsMissing(conn) {
   var sql = `
@@ -190,12 +194,12 @@ function writeLayoutsBuildingsMissing(conn) {
       SELECT s.section_id, s.queue_id, COUNT(l.layout_id) AS layout_count
       FROM section s
       LEFT JOIN layout l ON l.section_id = s.section_id
+      WHERE s.developer_offer IN ('available', 'open_reservation')
       GROUP BY s.section_id
     ) sec ON sec.queue_id = bq.queue_id
     LEFT JOIN geo_regions gr ON gr.region_id = b.region_id
     WHERE b.building_type = 'new_building'
       AND b.developer_offer IN ('available', 'open_reservation')
-      AND bq.developer_offer IN ('available', 'open_reservation')
     GROUP BY b.building_id, b.name_uk, gr.nominative_uk, b.status
     HAVING SUM(CASE WHEN sec.layout_count = 0 THEN 1 ELSE 0 END) > 0
     ORDER BY b.status DESC, sections_without DESC, name
