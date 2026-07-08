@@ -60,16 +60,16 @@ const AUTH_KEY = "sm_auth_ok";
 // Брендова палітра: Апероль-шприц, Мандариновий фреш, Київська цегла,
 // Київська панелька, Київська ніч, Ніч на Кирилівському, Седан-баклажан
 const DARK = {
-  bg: "#0d0d0d", surface: "#1c1420", border: "#332a3a",
-  accent: "#b15aa8", green: "#3fb950", red: "#e8402c",
-  yellow: "#d29922", muted: "#9c93a0", text: "#ecece1",
-  orange: "#ff6600",
+  bg: "#0d0d0d", surface: "#211823", border: "#3d2f45",
+  accent: "#d162c4", green: "#3fb950", red: "#ff5233",
+  yellow: "#d29922", muted: "#a89fb0", text: "#f2f0e6",
+  orange: "#ff7518",
 };
 const LIGHT = {
-  bg: "#ecece1", surface: "#ffffff", border: "#dedacd",
-  accent: "#7a2d6e", green: "#1a9850", red: "#d0371f",
-  yellow: "#b45309", muted: "#6b6558", text: "#0d0d0d",
-  orange: "#e65100",
+  bg: "#f3f1e8", surface: "#ffffff", border: "#e2ddcc",
+  accent: "#8f3480", green: "#1a9850", red: "#e0391f",
+  yellow: "#b45309", muted: "#756e60", text: "#121212",
+  orange: "#f2600a",
 };
 const ThemeContext = createContext(DARK);
 
@@ -721,6 +721,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
   const C = useContext(ThemeContext);
   const months = [...new Set((ringoKpiAll.data || []).map(r => r[0]))].filter(Boolean).sort((a, b) => monthKey(b) - monthKey(a));
   const [selectedMonth, setSelectedMonth] = useState(() => months[0] || "");
+  const [pieRange, setPieRange] = useState(1);
 
   // Sync selectedMonth if data arrives after initial render
   useEffect(() => {
@@ -767,9 +768,23 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
       missedPct:  parseInt(r[1]) > 0 ? Math.round(parseInt(r[2]) / parseInt(r[1]) * 100) : 0,
     }));
 
+  // ── розподіл Basic/Premium за обраний період (незалежно від місяця вгорі) ──
+  const sortedKpiDesc = [...(ringoKpiAll.data || [])].sort((a, b) => monthKey(b[0]) - monthKey(a[0]));
+  const pieSlice   = pieRange >= 999 ? sortedKpiDesc : sortedKpiDesc.slice(0, pieRange);
+  const pieTotal   = pieSlice.reduce((s, r) => s + (parseInt(r[1]) || 0), 0);
+  const pieMissed  = pieSlice.reduce((s, r) => s + (parseInt(r[2]) || 0), 0);
+  const pieBasic   = pieSlice.reduce((s, r) => s + (parseInt(r[3]) || 0), 0);
+  const piePremium = pieSlice.reduce((s, r) => s + (parseInt(r[4]) || 0), 0);
+  const pieMissedPct = pieTotal > 0 ? Math.round((pieMissed / pieTotal) * 100) : 0;
+  const pieRangeLabel = pieRange === 1
+    ? formatMonth(sortedKpiDesc[0]?.[0])
+    : pieRange >= 999
+      ? "за весь час"
+      : `останні ${pieRange} міс.`;
+
   const pieData = [
-    { name: "Premium", value: premium, color: "#" + RINGO_PREMIUM },
-    { name: "Basic",   value: basic,   color: "#" + RINGO_BASIC   },
+    { name: "Premium", value: piePremium, color: "#" + RINGO_PREMIUM },
+    { name: "Basic",   value: pieBasic,   color: "#" + RINGO_BASIC   },
   ];
 
   return (
@@ -864,9 +879,22 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         </div>
       </Card>
 
-      {/* ROW 2 — Pie Basic/Premium (вибраний місяць) */}
+      {/* ROW 2 — Pie Basic/Premium (обраний період) */}
       <Card>
-        <Label>Розподіл Basic / Premium — {formatMonth(selectedMonth)}</Label>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: 4 }}>
+          <Label style={{ marginBottom: 0 }}>Розподіл Basic / Premium — {pieRangeLabel}</Label>
+          <FilterPills
+            value={pieRange}
+            onChange={setPieRange}
+            options={[
+              { label: "1 міс",  value: 1   },
+              { label: "3 міс",  value: 3   },
+              { label: "6 міс",  value: 6   },
+              { label: "12 міс", value: 12  },
+              { label: "весь час", value: 999 },
+            ]}
+          />
+        </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:48, marginTop:8 }}>
           <div style={{ width:180, height:180, flexShrink:0 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -880,9 +908,9 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
           </div>
           <div style={{ display:"flex", gap:40 }}>
             {[
-              { label:"Premium", value:premium, pct: total>0?Math.round(premium/total*100):0, color:"#"+RINGO_PREMIUM },
-              { label:"Basic",   value:basic,   pct: total>0?Math.round(basic/total*100):0,   color:"#"+RINGO_BASIC   },
-              { label:"Пропущені", value:missed, pct: missedPct, color:C.red },
+              { label:"Premium", value:piePremium, pct: pieTotal>0?Math.round(piePremium/pieTotal*100):0, color:"#"+RINGO_PREMIUM },
+              { label:"Basic",   value:pieBasic,   pct: pieTotal>0?Math.round(pieBasic/pieTotal*100):0,   color:"#"+RINGO_BASIC   },
+              { label:"Пропущені", value:pieMissed, pct: pieMissedPct, color:C.red },
             ].map(item => (
               <div key={item.label}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
@@ -1141,30 +1169,7 @@ function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildin
         <CoverageCard label="Будинки без планувань" without={n("sections_without")} total={n("sections_total")} sub="активні будинки" />
       </div>
 
-      {/* ROW 1.5 — ЖК з будинками без планувань */}
-      <BuildingsMissingTable title="Premium ЖК — є будинки без планувань" rows={premiumRows} defaultOpen={true} />
-      <BuildingsMissingTable title="Basic ЖК — є будинки без планувань" rows={basicRows} defaultOpen={false} />
-
-      {/* ROW 2 — КМ типові проєкти */}
-      <Card>
-        <Label>Типові проєкти КМ (планування додано)</Label>
-        <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6 }}>
-          <PctRing value={kmPct} color={kmColor} size={88} />
-          <div>
-            <div style={{ fontSize: 38, fontWeight: 700, fontFamily: "'Lun', sans-serif", color: kmColor, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
-              {kmAdded.toLocaleString("uk-UA")}
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, fontFamily: "'Lun Mono', monospace", marginTop: 5 }}>
-              із {kmTotal.toLocaleString("uk-UA")} типових проєктів
-            </div>
-            <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>
-              без фото і без планування: {kmMissing.toLocaleString("uk-UA")}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* ROW 3 — Планувань додано по місяцях */}
+      {/* ROW 2 — Планувань додано по місяцях */}
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <Label style={{ marginBottom: 0 }}>Кількість планувань квартир додано</Label>
@@ -1200,6 +1205,29 @@ function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildin
             Значення — при наведенні на стовпчик
           </div>
         )}
+      </Card>
+
+      {/* ROW 3 — ЖК з будинками без планувань */}
+      <BuildingsMissingTable title="Premium ЖК — є будинки без планувань" rows={premiumRows} defaultOpen={true} />
+      <BuildingsMissingTable title="Basic ЖК — є будинки без планувань" rows={basicRows} defaultOpen={false} />
+
+      {/* ROW 4 — КМ типові проєкти */}
+      <Card>
+        <Label>Типові проєкти КМ (планування додано)</Label>
+        <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6 }}>
+          <PctRing value={kmPct} color={kmColor} size={88} />
+          <div>
+            <div style={{ fontSize: 38, fontWeight: 700, fontFamily: "'Lun', sans-serif", color: kmColor, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+              {kmAdded.toLocaleString("uk-UA")}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, fontFamily: "'Lun Mono', monospace", marginTop: 5 }}>
+              із {kmTotal.toLocaleString("uk-UA")} типових проєктів
+            </div>
+            <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>
+              без фото і без планування: {kmMissing.toLocaleString("uk-UA")}
+            </div>
+          </div>
+        </div>
       </Card>
     </div>
   );
