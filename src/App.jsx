@@ -94,6 +94,13 @@ function monthKey(ym) {
   const [y, m] = (ym || "").split("-");
   return (parseInt(y) || 0) * 12 + (parseInt(m) || 0);
 }
+// Нормалізує "YYYY-M"/"YYYY-MM" до єдиного формату "YYYY-MM",
+// щоб непадженi місяці ("2025-9") не рахувались окремо від "2025-09"
+function canonicalMonthKey(ym) {
+  const [y, m] = (ym || "").split("-");
+  const mm = parseInt(m) || 1;
+  return `${y}-${mm < 10 ? "0" + mm : mm}`;
+}
 
 // ============================================================
 // UI
@@ -817,13 +824,18 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
   ];
 
   // ── Пропущені дзвінки по статусах (з таблиці "Пропущені рінго") ──
-  const missedStatusMonths = [...new Set((ringoMissedStatus.data || []).map(r => r[0]))].sort((a, b) => monthKey(a) - monthKey(b));
+  // Місяці нормалізуємо до "YYYY-MM": в джерельній таблиці трапляються
+  // непадженi ключі ("2025-9" замість "2025-09"), які інакше рахуються
+  // як окремі місяці й дають візуальні "дублікати" стовпчиків.
+  const missedStatusMonths = [...new Set((ringoMissedStatus.data || []).map(r => canonicalMonthKey(r[0])))].sort((a, b) => monthKey(a) - monthKey(b));
   const missedStatusNames = [...new Set((ringoMissedStatus.data || []).map(r => r[1]))];
   const missedStatusChartData = missedStatusMonths.map(m => {
     const row = { month: formatMonth(m) };
     missedStatusNames.forEach(name => {
-      const found = (ringoMissedStatus.data || []).find(r => r[0] === m && r[1] === name);
-      row[name] = found ? (parseInt(found[2]) || 0) : 0;
+      const total = (ringoMissedStatus.data || [])
+        .filter(r => canonicalMonthKey(r[0]) === m && r[1] === name)
+        .reduce((s, r) => s + (parseInt(r[2]) || 0), 0);
+      row[name] = total;
     });
     return row;
   });
