@@ -842,18 +842,19 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
   const MISSED_STATUS_COLORS = [C.red, C.orange, C.muted, C.yellow];
 
   // ── Дошка позора: пропущені дзвінки по ЖК за обраний період ──
-  const shameMonthsAll = [...new Set((ringoMissedBuilding.data || []).map(r => r[2]))].sort((a, b) => monthKey(b) - monthKey(a));
+  // Джерело: місячні аркуші "Пропущені рінго" (name | month | missed | total),
+  // статус "не відповідали, зараз ок" вже відфільтровано на боці Apps Script.
+  const shameMonthsAll = [...new Set((ringoMissedBuilding.data || []).map(r => canonicalMonthKey(r[1])))].sort((a, b) => monthKey(b) - monthKey(a));
   const shameMonthsWindow = shameRange >= 999 ? shameMonthsAll : shameMonthsAll.slice(0, shameRange);
   const shameMonthsSet = new Set(shameMonthsWindow);
   const shameMap = new Map();
   (ringoMissedBuilding.data || []).forEach(r => {
-    const [name, region, month, missedCnt, totalCnt] = r;
-    if (!shameMonthsSet.has(month)) return;
-    const key = name + "||" + region;
-    const prev = shameMap.get(key) || { name, region, missed: 0, total: 0 };
+    const [name, month, missedCnt, totalCnt] = r;
+    if (!shameMonthsSet.has(canonicalMonthKey(month))) return;
+    const prev = shameMap.get(name) || { name, missed: 0, total: 0 };
     prev.missed += parseInt(missedCnt) || 0;
     prev.total += parseInt(totalCnt) || 0;
-    shameMap.set(key, prev);
+    shameMap.set(name, prev);
   });
   // 1 міс — від 6 пропущених; 3/6/12 міс — від 11 пропущених (менш "шумно" на довших періодах)
   const shameThreshold = shameRange === 1 ? 5 : 10;
@@ -1115,11 +1116,10 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", maxWidth: 820, margin: "0 auto", borderCollapse: "collapse", fontSize: 13 }}>
+            <table style={{ width: "100%", maxWidth: 700, margin: "0 auto", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>ЖК</th>
-                  <th style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>Регіон</th>
                   <th style={{ textAlign: "right", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>Пропущено</th>
                   <th style={{ textAlign: "right", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>Всього дзвінків</th>
                   <th style={{ textAlign: "right", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>%</th>
@@ -1131,7 +1131,6 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
                   return (
                     <tr key={r.name + i} style={{ borderBottom: `1px solid ${C.border}` }}>
                       <td style={{ padding: "10px", fontWeight: 600, color: C.text }}>{r.name}</td>
-                      <td style={{ padding: "10px", color: C.muted }}>{r.region}</td>
                       <td style={{ padding: "10px", textAlign: "right", color: C.red, fontFamily: "'Lun Mono', monospace", fontWeight: 700 }}>{r.missed.toLocaleString("uk-UA")}</td>
                       <td style={{ padding: "10px", textAlign: "right", color: C.muted, fontFamily: "'Lun Mono', monospace" }}>{r.total.toLocaleString("uk-UA")}</td>
                       <td style={{ padding: "10px", textAlign: "right", color: pctColor, fontFamily: "'Lun Mono', monospace", fontWeight: 700 }}>{r.pct}%</td>

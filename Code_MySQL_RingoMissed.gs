@@ -4,10 +4,13 @@
 // 1) копіює вручну підтримувану статистику з таблиці "Пропущені рінго"
 //    (інша Google Таблиця, доступна лише твоєму акаунту — тому читаємо
 //    її через SpreadsheetApp, а не через публічний API-ключ)
-// 2) "дошка позора" по ЖК з пропущеними дзвінками, з MySQL напряму
+// 2) "дошка позора" по ЖК з пропущеними дзвінками — тепер напряму з
+//    місячних аркушів тієї ж таблиці ("Травень 2025", "Червень 2025"...),
+//    де вже є готові total/missed/% і статус причини (той самий скрипт,
+//    що будує аркуш "Аналітика"). MySQL більше не потрібен.
 // Додати цей файл в той самий Apps Script проєкт, що й Code_MySQL_Ringostat.gs
-// (використовує його getConnection() / writeSheet() / SHEET_ID)
-// Запускати по тригеру: щогодини / раз на день
+// (використовує його writeSheet() / SHEET_ID)
+// Запускати по тригеру: раз на день
 // ============================================================
 
 // Джерело: "Пропущені рінго" — окрема таблиця, gid береться з посилання
@@ -15,41 +18,25 @@
 var MISSED_SOURCE_SHEET_ID = "10cRDvJjY7IKQqANqElPKoAUT-Q-yWK9mugOa6sjn9hs";
 var MISSED_SOURCE_GID = 1315996403;
 
+// Статус, який вважаємо "вже вирішеним" — не показуємо в дошці позора
+var RESOLVED_STATUS = "не відповідали, зараз ок";
+
 function syncRingoMissedAnalytics() {
   syncMissedCallsFromSourceSheet();
-
-  var conn;
-  try {
-    conn = getConnection();
-    writeMissedCallsWallOfShame(conn);
-    Logger.log("Ringo missed-calls sync done: " + new Date());
-  } catch (e) {
-    Logger.log("Error: " + e);
-    throw e;
-  } finally {
-    if (conn) conn.close();
-  }
+  writeMissedCallsWallOfShame();
+  Logger.log("Ringo missed-calls sync done: " + new Date());
 }
 
 // ============================================================
 // 1. Ringo_Missed_By_Status_Monthly
 // Колонки: month | status | missed_calls
 // Копія вручну підтримуваної статистики з "Пропущені рінго".
-// Читаємо через SpreadsheetApp (авторизація по твоєму акаунту),
-// а не через API-ключ, бо та таблиця не відкрита для нього.
 // ⚠️ ПЕРЕВІРТЕ: якщо на вкладці "Пропущені рінго" зміниться розташування
 // рядків/колонок, оновіть STATUS_ROWS і діапазон місяців нижче.
 // ============================================================
 function syncMissedCallsFromSourceSheet() {
   var sourceSs = SpreadsheetApp.openById(MISSED_SOURCE_SHEET_ID);
-  var sheets = sourceSs.getSheets();
-  var sourceSheet = null;
-  for (var i = 0; i < sheets.length; i++) {
-    if (sheets[i].getSheetId() === MISSED_SOURCE_GID) {
-      sourceSheet = sheets[i];
-      break;
-    }
-  }
+  var sourceSheet = getSheetByGid(sourceSs, MISSED_SOURCE_GID);
   if (!sourceSheet) {
     throw new Error("Не знайдено вкладку з gid " + MISSED_SOURCE_GID + " у джерельній таблиці");
   }
@@ -78,6 +65,14 @@ function syncMissedCallsFromSourceSheet() {
   writeSheet("Ringo_Missed_By_Status_Monthly", rows);
 }
 
+function getSheetByGid(spreadsheet, gid) {
+  var sheets = spreadsheet.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId() === gid) return sheets[i];
+  }
+  return null;
+}
+
 function monthLabelToKey(uaLabel) {
   var MONTHS = {
     "січень": 1, "лютий": 2, "березень": 3, "квітень": 4, "травень": 5, "червень": 6,
@@ -90,47 +85,50 @@ function monthLabelToKey(uaLabel) {
   return y + "-" + (m < 10 ? "0" + m : m);
 }
 
+function normalizeReasonStatus(value) {
+  return (value || "").toString().trim()
+    .replace(/[ʼ'`]/g, "'")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
 // ============================================================
 // 2. Ringo_Missed_By_Building_Monthly ("дошка позора")
-// Колонки: name | region | month | missed_calls | total_calls
-// Пропущені й всього дзвінків (для %) по ЖК, по місяцях, за останні
-// 12 місяців. ⚠️ Раніше було 6 міс через ризик підвисання запиту —
-// повернено на 12 за запитом; якщо знову висітиме довго, скажи,
-// зменшимо назад. Фільтр періоду (1/3/6/12 міс) — на дашборді.
-// Рахуємо напряму з MySQL, а не зі статусів "Пропущені рінго" —
-// тому щойно ЖК починає відповідати, воно природно зникає зі списку
-// в наступному місяці, без потреби вручну відстежувати статус "вже ок".
+// Колонки: name | month | missed_calls | total_calls
+// Читаємо напряму з місячних аркушів джерельної таблиці ("Травень 2025",
+// "Червень 2025" ...) — там для кожного номера/ЖК уже є total_calls,
+// missed_calls і статус причини. Рядки зі статусом "не відповідали,
+// зараз ок" (уже вирішено) пропускаємо.
+// ⚠️ ПЕРЕВІРТЕ: індекси колонок нижче (B=назва/адреса, C=всього,
+// D=пропущено, G=статус) відповідають структурі на момент написання.
 // ============================================================
-function writeMissedCallsWallOfShame(conn) {
-  var sql = `
-    SELECT
-      COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('ЖК #', b.building_id)) AS name,
-      gr.nominative_uk AS region,
-      DATE_FORMAT(rc.call_timestamp, '%Y-%m') AS month,
-      SUM(CASE WHEN rc.call_status = 'NO ANSWER' THEN 1 ELSE 0 END) AS missed_calls,
-      COUNT(*) AS total_calls
-    FROM b2b.ringo_call rc
-    INNER JOIN buildings b ON rc.building_id = b.building_id
-    LEFT JOIN geo_regions gr ON gr.region_id = b.region_id
-    WHERE rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 12 MONTH), '%Y-%m-01')
-    GROUP BY b.building_id, COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('ЖК #', b.building_id)), gr.nominative_uk, DATE_FORMAT(rc.call_timestamp, '%Y-%m')
-    ORDER BY name, month
-  `;
+function writeMissedCallsWallOfShame() {
+  var sourceSs = SpreadsheetApp.openById(MISSED_SOURCE_SHEET_ID);
 
-  var stmt = conn.prepareStatement(sql);
-  var rs = stmt.executeQuery();
+  var monthSheets = sourceSs.getSheets().filter(function (s) {
+    return /^[а-яґєії]+\s+20\d{2}$/i.test(s.getName().trim());
+  });
 
-  var rows = [["name", "region", "month", "missed_calls", "total_calls"]];
-  while (rs.next()) {
-    rows.push([
-      rs.getString("name"),
-      rs.getString("region"),
-      rs.getString("month"),
-      rs.getInt("missed_calls"),
-      rs.getInt("total_calls"),
-    ]);
-  }
-  rs.close(); stmt.close();
+  var rows = [["name", "month", "missed_calls", "total_calls"]];
+
+  monthSheets.forEach(function (sheet) {
+    var monthKeyStr = monthLabelToKey(sheet.getName());
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    data.forEach(function (row) {
+      var name = (row[1] || "").toString().trim();
+      var total = Number(row[2]) || 0;
+      var missed = Number(row[3]) || 0;
+      var status = normalizeReasonStatus(row[6]);
+
+      if (!name || total === 0) return;
+      if (status === RESOLVED_STATUS) return; // вже ок — пропускаємо
+
+      rows.push([name, monthKeyStr, missed, total]);
+    });
+  });
 
   writeSheet("Ringo_Missed_By_Building_Monthly", rows);
 }
