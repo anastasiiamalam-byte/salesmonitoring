@@ -102,11 +102,26 @@ function normalizeReasonStatus(value) {
 // ⚠️ ПЕРЕВІРТЕ: індекси колонок нижче (B=назва/адреса, C=всього,
 // D=пропущено, G=статус) відповідають структурі на момент написання.
 // ============================================================
+// Тільки справжні місячні аркуші — назва має бути "<укр. місяць> <рік>",
+// напр. "Вересень 2025". Все інше (Аркуш9, Аналітика, miss_calls_check
+// та інші службові аркуші) пропускається.
+var UA_MONTH_NAMES = [
+  "січень", "лютий", "березень", "квітень", "травень", "червень",
+  "липень", "серпень", "вересень", "жовтень", "листопад", "грудень",
+];
+
+function isMonthSheetName(name) {
+  var parts = String(name || "").trim().toLowerCase().split(/\s+/);
+  return parts.length === 2
+    && UA_MONTH_NAMES.indexOf(parts[0]) !== -1
+    && /^20\d{2}$/.test(parts[1]);
+}
+
 function writeMissedCallsWallOfShame() {
   var sourceSs = SpreadsheetApp.openById(MISSED_SOURCE_SHEET_ID);
 
   var monthSheets = sourceSs.getSheets().filter(function (s) {
-    return /^[а-яґєії]+\s+20\d{2}$/i.test(s.getName().trim());
+    return isMonthSheetName(s.getName());
   });
 
   var rows = [["name", "month", "missed_calls", "total_calls"]];
