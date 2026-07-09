@@ -103,7 +103,7 @@ function monthLabelToKey(uaLabel) {
 function writeMissedCallsWallOfShame(conn) {
   var sql = `
     SELECT
-      b.name_uk AS name,
+      COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('ЖК #', b.building_id)) AS name,
       gr.nominative_uk AS region,
       DATE_FORMAT(rc.call_timestamp, '%Y-%m') AS month,
       COUNT(*) AS missed_calls
@@ -112,7 +112,7 @@ function writeMissedCallsWallOfShame(conn) {
     LEFT JOIN geo_regions gr ON gr.region_id = b.region_id
     WHERE rc.call_status = 'NO ANSWER'
       AND rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 6 MONTH), '%Y-%m-01')
-    GROUP BY b.building_id, b.name_uk, gr.nominative_uk, DATE_FORMAT(rc.call_timestamp, '%Y-%m')
+    GROUP BY b.building_id, COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('ЖК #', b.building_id)), gr.nominative_uk, DATE_FORMAT(rc.call_timestamp, '%Y-%m')
     ORDER BY name, month
   `;
 

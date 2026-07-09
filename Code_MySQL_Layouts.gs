@@ -223,7 +223,7 @@ function writeKmMonthly(conn) {
 function writeLayoutsBuildingsMissing(conn) {
   var sql = `
     SELECT
-      b.name_uk AS name,
+      COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('ЖК #', b.building_id)) AS name,
       gr.nominative_uk AS region,
       b.status AS status,
       SUM(CASE WHEN sec.layout_count = 0 THEN 1 ELSE 0 END) AS sections_without,
@@ -240,7 +240,7 @@ function writeLayoutsBuildingsMissing(conn) {
     LEFT JOIN geo_regions gr ON gr.region_id = b.region_id
     WHERE b.building_type = 'new_building'
       AND b.developer_offer IN ('available', 'open_reservation')
-    GROUP BY b.building_id, b.name_uk, gr.nominative_uk, b.status
+    GROUP BY b.building_id, COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('ЖК #', b.building_id)), gr.nominative_uk, b.status
     HAVING SUM(CASE WHEN sec.layout_count = 0 THEN 1 ELSE 0 END) > 0
     ORDER BY b.status DESC, sections_without DESC, name
   `;

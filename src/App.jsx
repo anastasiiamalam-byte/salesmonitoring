@@ -1079,7 +1079,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
       {/* ROW 6 — Дошка позора: ЖК, що не беруть слухавку */}
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <Label style={{ marginBottom: 0 }}>Дошка позора — ЖК, що не беруть слухавку</Label>
+          <div style={{ fontFamily: "'Lun Display', sans-serif", fontSize: 18, fontWeight: 700, color: C.text }}>Дошка позора — ЖК, що не беруть слухавку</div>
           <FilterPills
             value={shameRange}
             onChange={setShameRange}
@@ -1096,7 +1096,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", maxWidth: 700, borderCollapse: "collapse", fontSize: 13 }}>
+            <table style={{ width: "100%", maxWidth: 700, margin: "0 auto", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>ЖК</th>
