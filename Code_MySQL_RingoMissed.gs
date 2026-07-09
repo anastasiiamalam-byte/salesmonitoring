@@ -55,8 +55,8 @@ function syncMissedCallsFromSourceSheet() {
   }
 
   var lastCol = sourceSheet.getLastColumn();
-  var monthsCount = lastCol - 3; // колонки C..передостанньої, без "Всього" в останній
-  var headerRow = sourceSheet.getRange(1, 3, 1, monthsCount).getValues()[0];
+  var monthsCount = lastCol - 2; // колонки B..передостанньої, без "Всього" в останній
+  var headerRow = sourceSheet.getRange(1, 2, 1, monthsCount).getValues()[0];
   var months = headerRow.map(monthLabelToKey);
 
   // Рядки "втрачено дзвінків" по кожному статусу (за структурою таблиці на момент написання)
@@ -69,7 +69,7 @@ function syncMissedCallsFromSourceSheet() {
 
   var rows = [["month", "status", "missed_calls"]];
   STATUS_ROWS.forEach(function (s) {
-    var values = sourceSheet.getRange(s.row, 3, 1, monthsCount).getValues()[0];
+    var values = sourceSheet.getRange(s.row, 2, 1, monthsCount).getValues()[0];
     for (var i = 0; i < months.length; i++) {
       rows.push([months[i], s.label, Number(values[i]) || 0]);
     }
