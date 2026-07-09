@@ -1173,7 +1173,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
 // ============================================================
 // ВКЛАДКА LAYOUTS (планування)
 // ============================================================
-function CoverageCard({ label, without, total, sub }) {
+function CoverageCard({ label, without, total, sub, extra }) {
   const C = useContext(ThemeContext);
   const pct = total > 0 ? Math.round((without / total) * 100) : 0;
   const color = pct >= 30 ? C.red : pct >= 15 ? C.yellow : C.green;
@@ -1189,6 +1189,7 @@ function CoverageCard({ label, without, total, sub }) {
           </div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>без планувань · {sub}</div>
           <div style={{ fontSize: 10, color: C.green, marginTop: 2 }}>з плануванням: {withCount.toLocaleString("uk-UA")}</div>
+          {extra && <div style={{ fontSize: 10, color: C.red, marginTop: 2 }}>{extra}</div>}
         </div>
       </div>
     </Card>
@@ -1281,9 +1282,6 @@ function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildin
   const kmTotal = km("km_total");
   const kmMissing = km("km_missing");
   const kmNoPrice = km("km_no_price");
-  const kmAdded = Math.max(kmTotal - kmMissing, 0);
-  const kmPct = kmTotal > 0 ? Math.round((kmAdded / kmTotal) * 100) : 0;
-  const kmColor = kmPct >= 75 ? C.green : kmPct >= 50 ? C.yellow : C.red;
 
   const kmMonthData = kmMonthly.data.slice(-kmMonthsCount).map(r => ({
     month: formatMonth(r[0]),
@@ -1303,76 +1301,15 @@ function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildin
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* ROW 1 — КМ типові проєкти */}
-      <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <Label style={{ marginBottom: 0 }}>Типові проєкти КМ (планування додано)</Label>
-          <div style={{ fontSize: 12, fontFamily: "'Lun Mono', monospace", color: C.red, background: C === DARK ? "#2e150f" : "#fbe0da", padding: "3px 10px", borderRadius: 6 }}>
-            без цін: {kmNoPrice.toLocaleString("uk-UA")}
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6 }}>
-          <PctRing value={kmPct} color={kmColor} size={88} />
-          <div>
-            <div style={{ fontSize: 38, fontWeight: 700, fontFamily: "'Lun', sans-serif", color: kmColor, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
-              {kmAdded.toLocaleString("uk-UA")}
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, fontFamily: "'Lun Mono', monospace", marginTop: 5 }}>
-              із {kmTotal.toLocaleString("uk-UA")} типових проєктів
-            </div>
-            <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>
-              без фото і без планування: {kmMissing.toLocaleString("uk-UA")}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* ROW 2 — Нових ТП по місяцях */}
-      <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <Label style={{ marginBottom: 0 }}>Нових типових проєктів КМ по місяцях</Label>
-          <FilterPills
-            value={kmMonthsCount}
-            onChange={setKmMonthsCount}
-            options={[
-              { label: "6 міс",  value: 6  },
-              { label: "12 міс", value: 12 },
-              { label: "24 міс", value: 24 },
-              { label: "всі",    value: 999 },
-            ]}
-          />
-        </div>
-        <div style={{ height: 260 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={kmMonthData} barCategoryGap="25%" margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} allowDecimals={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" name="Нових ТП" fill={C.accent} radius={[4,4,0,0]}>
-                {kmMonthData.length <= 14 && (
-                  <LabelList dataKey="count" position="top"
-                    style={{ fill: C.text, fontSize: 11, fontFamily: "'Lun Mono', monospace", fontWeight: 600 }}
-                    formatter={v => v.toLocaleString("uk-UA")} />
-                )}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        {kmMonthData.length > 14 && (
-          <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
-            Значення — при наведенні на стовпчик
-          </div>
-        )}
-      </Card>
-
-      {/* ROW 3 — покриття плануваннями */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+      {/* ROW 1 — покриття плануваннями + ТП, 4 картки в ряд */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
         <CoverageCard label="ЖК без планувань" without={n("buildings_without")} total={n("buildings_total")} sub="активні ЖК" />
         <CoverageCard label="Черги без планувань" without={n("queues_without")} total={n("queues_total")} sub="активні черги" />
         <CoverageCard label="Будинки без планувань" without={n("sections_without")} total={n("sections_total")} sub="активні будинки" />
+        <CoverageCard label="ТП без планувань" without={kmMissing} total={kmTotal} sub="типових проєктів" extra={`без цін: ${kmNoPrice.toLocaleString("uk-UA")}`} />
       </div>
 
-      {/* ROW 4 — Планувань додано по місяцях */}
+      {/* ROW 2 — Планувань додано по місяцях */}
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <Label style={{ marginBottom: 0 }}>Кількість планувань квартир додано</Label>
@@ -1410,7 +1347,45 @@ function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildin
         )}
       </Card>
 
-      {/* ROW 5 — ЖК з будинками без планувань */}
+      {/* ROW 3 — Кількість доданих ТП по місяцях */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <Label style={{ marginBottom: 0 }}>Нових типових проєктів КМ по місяцях</Label>
+          <FilterPills
+            value={kmMonthsCount}
+            onChange={setKmMonthsCount}
+            options={[
+              { label: "6 міс",  value: 6  },
+              { label: "12 міс", value: 12 },
+              { label: "24 міс", value: 24 },
+              { label: "всі",    value: 999 },
+            ]}
+          />
+        </div>
+        <div style={{ height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={kmMonthData} barCategoryGap="25%" margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} allowDecimals={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="count" name="Нових ТП" fill={C.accent} radius={[4,4,0,0]}>
+                {kmMonthData.length <= 14 && (
+                  <LabelList dataKey="count" position="top"
+                    style={{ fill: C.text, fontSize: 11, fontFamily: "'Lun Mono', monospace", fontWeight: 600 }}
+                    formatter={v => v.toLocaleString("uk-UA")} />
+                )}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        {kmMonthData.length > 14 && (
+          <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
+            Значення — при наведенні на стовпчик
+          </div>
+        )}
+      </Card>
+
+      {/* ROW 4 — ЖК з будинками без планувань */}
       <BuildingsMissingTable title="Premium ЖК — є будинки без планувань" rows={premiumRows} defaultOpen={true} />
       <BuildingsMissingTable title="Basic ЖК — є будинки без планувань" rows={basicRows} defaultOpen={false} />
     </div>
