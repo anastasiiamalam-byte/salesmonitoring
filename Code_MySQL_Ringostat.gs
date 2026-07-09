@@ -11,7 +11,7 @@ function getConnection() {
   var db    = props.getProperty("DB_NAME");
   var user  = props.getProperty("DB_USER");
   var pass  = props.getProperty("DB_PASS");
-  var url   = `jdbc:mysql://${host}:${port}/${db}?connectTimeout=10000&socketTimeout=60000`;
+  var url   = `jdbc:mysql://${host}:${port}/${db}`;
   Logger.log("DB URL: " + url);
   Logger.log("DB USER: " + user);
   return Jdbc.getConnection(url, user, pass);
