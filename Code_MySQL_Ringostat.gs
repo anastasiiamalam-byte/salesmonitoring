@@ -184,6 +184,9 @@ function writeSheet(sheetName, rows) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) sheet = ss.insertSheet(sheetName);
   sheet.clearContents();
+  sheet.clearFormats(); // прибирає лишній формат клітинок (напр. "дата"),
+                        // що лишався від попередньої структури колонок
+                        // і псував відображення нових числових значень
   if (rows.length > 0) {
     sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
   }
