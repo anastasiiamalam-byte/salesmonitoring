@@ -106,7 +106,7 @@ function writeMissedCallsWallOfShame(conn) {
       gr.nominative_uk AS region,
       DATE_FORMAT(rc.call_timestamp, '%Y-%m') AS month,
       COUNT(*) AS missed_calls
-    FROM ringo_call rc
+    FROM b2b.ringo_call rc
     INNER JOIN buildings b ON rc.building_id = b.building_id
     LEFT JOIN geo_regions gr ON gr.region_id = b.region_id
     WHERE rc.call_status = 'NO ANSWER'
