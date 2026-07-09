@@ -24,6 +24,8 @@ const FEEDS_COMPANY_URL      = url("Feeds_By_Company");
 const RINGO_KPI_URL    = url("Ringo_KPI_Monthly");
 const RINGO_REGION_URL = url("Ringo_By_Region");
 const RINGO_KM_URL     = url("Ringo_KM");
+const RINGO_MISSED_STATUS_URL   = url("Ringo_Missed_By_Status_Monthly");
+const RINGO_MISSED_BUILDING_URL = url("Ringo_Missed_By_Building_Monthly");
 
 const LAYOUTS_MONTHLY_URL   = url("Layouts_Monthly");
 const LAYOUTS_COVERAGE_URL  = url("Layouts_Coverage");
@@ -743,11 +745,12 @@ function MonthSelect({ months, value, onChange }) {
   );
 }
 
-function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
+function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedStatus, ringoMissedBuilding, loading }) {
   const C = useContext(ThemeContext);
   const months = [...new Set((ringoKpiAll.data || []).map(r => r[0]))].filter(Boolean).sort((a, b) => monthKey(b) - monthKey(a));
   const [selectedMonth, setSelectedMonth] = useState(() => months[0] || "");
   const [pieRange, setPieRange] = useState(1);
+  const [shameRange, setShameRange] = useState(1);
 
   // Sync selectedMonth if data arrives after initial render
   useEffect(() => {
@@ -812,6 +815,34 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
     { name: "Premium", value: piePremium, color: "#" + RINGO_PREMIUM },
     { name: "Basic",   value: pieBasic,   color: "#" + RINGO_BASIC   },
   ];
+
+  // ── Пропущені дзвінки по статусах (з таблиці "Пропущені рінго") ──
+  const missedStatusMonths = [...new Set((ringoMissedStatus.data || []).map(r => r[0]))].sort((a, b) => monthKey(a) - monthKey(b));
+  const missedStatusNames = [...new Set((ringoMissedStatus.data || []).map(r => r[1]))];
+  const missedStatusChartData = missedStatusMonths.map(m => {
+    const row = { month: formatMonth(m) };
+    missedStatusNames.forEach(name => {
+      const found = (ringoMissedStatus.data || []).find(r => r[0] === m && r[1] === name);
+      row[name] = found ? (parseInt(found[2]) || 0) : 0;
+    });
+    return row;
+  });
+  const MISSED_STATUS_COLORS = [C.red, C.orange, C.muted, C.yellow];
+
+  // ── Дошка позора: пропущені дзвінки по ЖК за обраний період ──
+  const shameMonthsAll = [...new Set((ringoMissedBuilding.data || []).map(r => r[2]))].sort((a, b) => monthKey(b) - monthKey(a));
+  const shameMonthsWindow = shameRange >= 999 ? shameMonthsAll : shameMonthsAll.slice(0, shameRange);
+  const shameMonthsSet = new Set(shameMonthsWindow);
+  const shameMap = new Map();
+  (ringoMissedBuilding.data || []).forEach(r => {
+    const [name, region, month, cnt] = r;
+    if (!shameMonthsSet.has(month)) return;
+    const key = name + "||" + region;
+    const prev = shameMap.get(key) || { name, region, missed: 0 };
+    prev.missed += parseInt(cnt) || 0;
+    shameMap.set(key, prev);
+  });
+  const shameRows = [...shameMap.values()].filter(r => r.missed > 0).sort((a, b) => b.missed - a.missed);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
@@ -1017,7 +1048,78 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, loading }) {
         </Card>
       )}
 
-      {/* ROW 5 — Таблиця KМ по ЖК (прихована — замінена графіком) */}
+      {/* ROW 5 — Пропущені дзвінки по статусах (з таблиці "Пропущені рінго") */}
+      {missedStatusChartData.length > 0 && (
+        <Card>
+          <Label>Пропущені дзвінки по статусах</Label>
+          <div style={{ marginTop: 14, height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={missedStatusChartData} barCategoryGap="25%" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} />
+                <Tooltip content={<CustomTooltip />} />
+                {missedStatusNames.map((name, i) => (
+                  <Bar key={name} dataKey={name} name={name} stackId="a"
+                    fill={MISSED_STATUS_COLORS[i % MISSED_STATUS_COLORS.length]}
+                    radius={i === missedStatusNames.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" }}>
+            {missedStatusNames.map((name, i) => (
+              <div key={name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
+                <div style={{ width: 10, height: 10, borderRadius: 2, background: MISSED_STATUS_COLORS[i % MISSED_STATUS_COLORS.length] }} />{name}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ROW 6 — Дошка позора: ЖК, що не беруть слухавку */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <Label style={{ marginBottom: 0 }}>Дошка позора — ЖК, що не беруть слухавку</Label>
+          <FilterPills
+            value={shameRange}
+            onChange={setShameRange}
+            options={[
+              { label: "1 міс",  value: 1  },
+              { label: "3 міс",  value: 3  },
+              { label: "6 міс",  value: 6  },
+              { label: "12 міс", value: 12 },
+            ]}
+          />
+        </div>
+        {shameRows.length === 0 ? (
+          <div style={{ padding: "20px", textAlign: "center", color: C.green, fontFamily: "'Lun Mono', monospace", fontSize: 13 }}>
+            ✓ Немає пропущених дзвінків за цей період
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", maxWidth: 700, borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>ЖК</th>
+                  <th style={{ textAlign: "left", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>Регіон</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", color: C.muted, fontFamily: "'Lun Mono', monospace", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>Пропущено</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shameRows.map((r, i) => (
+                  <tr key={r.name + i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: "10px", fontWeight: 600, color: C.text }}>{r.name}</td>
+                    <td style={{ padding: "10px", color: C.muted }}>{r.region}</td>
+                    <td style={{ padding: "10px", textAlign: "right", color: C.red, fontFamily: "'Lun Mono', monospace", fontWeight: 700 }}>{r.missed.toLocaleString("uk-UA")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* ROW 7 — Таблиця KМ по ЖК (прихована — замінена графіком) */}
       {false && kmData.length > 0 && (
         <Card>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
@@ -1410,6 +1512,8 @@ function Dashboard({ onLogout }) {
   const [ringoKpiAll,      setRingoKpiAll]      = useState({ headers:[], data:[] });
   const [ringoByRegionAll, setRingoByRegionAll] = useState({ headers:[], data:[] });
   const [ringoKmAll,       setRingoKmAll]       = useState({ headers:[], data:[] });
+  const [ringoMissedStatus,   setRingoMissedStatus]   = useState({ headers:[], data:[] });
+  const [ringoMissedBuilding, setRingoMissedBuilding] = useState({ headers:[], data:[] });
   const [ringoLoaded,      setRingoLoaded]      = useState(false);
   const [ringoLoading,     setRingoLoading]     = useState(false);
   const [ringoError,       setRingoError]       = useState(null);
@@ -1509,13 +1613,16 @@ function Dashboard({ onLogout }) {
     setRingoLoading(true);
     setRingoError(null);
     try {
-      const [r1, r2, r3] = await Promise.all([
+      const [r1, r2, r3, r4, r5] = await Promise.all([
         fetch(RINGO_KPI_URL), fetch(RINGO_REGION_URL), fetch(RINGO_KM_URL),
+        fetch(RINGO_MISSED_STATUS_URL), fetch(RINGO_MISSED_BUILDING_URL),
       ]);
-      const [j1, j2, j3] = await Promise.all([r1.json(), r2.json(), r3.json()]);
+      const [j1, j2, j3, j4, j5] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json(), r5.json()]);
       setRingoKpiAll(parseTable(j1.values));
       setRingoByRegionAll(parseTable(j2.values));
       setRingoKmAll(parseTable(j3.values));
+      setRingoMissedStatus(parseTable(j4.values));
+      setRingoMissedBuilding(parseTable(j5.values));
       setRingoLoaded(true);
     } catch {
       setRingoError("Не вдалося завантажити дані Ringostat.");
@@ -1682,7 +1789,7 @@ function Dashboard({ onLogout }) {
         {activeTab === "Realbase"  && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
         {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} feedsByCompany={feedsByCompany} loading={feedsLoading} />}
         {activeTab === "Layouts"   && <LayoutsTab layoutsMonthly={layoutsMonthly} layoutsCoverage={layoutsCoverage} layoutsKM={layoutsKM} layoutsBuildings={layoutsBuildings} kmMonthly={kmMonthly} loading={layoutsLoading} />}
-        {activeTab === "Ringostat" && <RingostatTab ringoKpiAll={ringoKpiAll} ringoByRegionAll={ringoByRegionAll} ringoKmAll={ringoKmAll} loading={ringoLoading} />}
+        {activeTab === "Ringostat" && <RingostatTab ringoKpiAll={ringoKpiAll} ringoByRegionAll={ringoByRegionAll} ringoKmAll={ringoKmAll} ringoMissedStatus={ringoMissedStatus} ringoMissedBuilding={ringoMissedBuilding} loading={ringoLoading} />}
       </div>
     </div>
     </ThemeContext.Provider>
