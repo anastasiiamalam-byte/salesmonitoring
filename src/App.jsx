@@ -859,6 +859,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
   // 1 міс — від 6 пропущених; 3/6/12 міс — від 11 пропущених (менш "шумно" на довших періодах)
   const shameThreshold = shameRange === 1 ? 5 : 10;
   const shameRows = [...shameMap.values()]
+    .filter(r => r.missed <= r.total) // захист від битих даних з джерела (пропущено > всього)
     .map(r => ({ ...r, pct: r.total > 0 ? Math.round((r.missed / r.total) * 100) : 0 }))
     .filter(r => r.missed > shameThreshold)
     .sort((a, b) => b.missed - a.missed);

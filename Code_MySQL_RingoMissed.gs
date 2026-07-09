@@ -124,6 +124,7 @@ function writeMissedCallsWallOfShame() {
       var status = normalizeReasonStatus(row[6]);
 
       if (!name || total === 0) return;
+      if (missed > total) return; // биті дані в джерелі — пропущено не може бути більше за всього
       if (status === RESOLVED_STATUS) return; // вже ок — пропускаємо
 
       rows.push([name, monthKeyStr, missed, total]);
