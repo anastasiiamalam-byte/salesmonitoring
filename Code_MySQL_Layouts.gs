@@ -15,6 +15,7 @@ function syncLayoutsData() {
     writeLayoutsCoverage(conn);
     writeLayoutsKM(conn);
     writeLayoutsBuildingsMissing(conn);
+    writeKmMonthly(conn);
 
     Logger.log("✅ Layouts sync done: " + new Date());
   } catch (e) {
@@ -142,7 +143,8 @@ function writeLayoutsCoverage(conn) {
 
 // ============================================================
 // 3. Layouts_KM (key-value)
-// Типові проєкти котеджних містечок (КМ) без фото і без планування
+// Типові проєкти котеджних містечок (КМ) без фото і без планування,
+// і скільки з них без цін (за твоїм запитом).
 // ============================================================
 function writeLayoutsKM(conn) {
   var sql = `
@@ -153,7 +155,15 @@ function writeLayoutsKM(conn) {
        LEFT JOIN cottage_project_layout cpl ON cpl.project_id = ctp.project_id
        WHERE cpi.image_id IS NULL AND cpl.image_id IS NULL) AS km_missing,
 
-      (SELECT COUNT(*) FROM cottage_typical_project) AS km_total
+      (SELECT COUNT(*) FROM cottage_typical_project) AS km_total,
+
+      (SELECT COUNT(*)
+       FROM cottage_price cp
+       LEFT JOIN cottage_typical_project ctp ON cp.project_id = ctp.project_id
+       LEFT JOIN buildings b ON cp.building_id = b.building_id
+       WHERE cp.project_id IS NULL
+         AND cp.is_sold = 'no'
+         AND b.developer_offer IN ('available', 'open_reservation')) AS km_no_price
   `;
 
   var stmt = conn.prepareStatement(sql);
@@ -163,10 +173,41 @@ function writeLayoutsKM(conn) {
   if (rs.next()) {
     rows.push(["km_missing", rs.getInt("km_missing")]);
     rows.push(["km_total", rs.getInt("km_total")]);
+    rows.push(["km_no_price", rs.getInt("km_no_price")]);
   }
   rs.close(); stmt.close();
 
   writeSheet("Layouts_KM", rows);
+}
+
+// ============================================================
+// 3b. Layouts_KM_Monthly
+// Колонки: month | count
+// Скільки нових типових проєктів (ТП) створено по місяцях (останні 24 місяці)
+// ⚠️ ПЕРЕВІРТЕ: назва колонки дати створення в cottage_typical_project.
+// Тут припущено create_time — підставте свою (created_at / insert_date тощо).
+// ============================================================
+function writeKmMonthly(conn) {
+  var sql = `
+    SELECT
+      DATE_FORMAT(ctp.create_time, '%Y-%m') AS month,
+      COUNT(*) AS cnt
+    FROM cottage_typical_project ctp
+    WHERE ctp.create_time >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 24 MONTH), '%Y-%m-01')
+    GROUP BY DATE_FORMAT(ctp.create_time, '%Y-%m')
+    ORDER BY month
+  `;
+
+  var stmt = conn.prepareStatement(sql);
+  var rs = stmt.executeQuery();
+
+  var rows = [["month", "count"]];
+  while (rs.next()) {
+    rows.push([rs.getString(1), rs.getInt(2)]);
+  }
+  rs.close(); stmt.close();
+
+  writeSheet("Layouts_KM_Monthly", rows);
 }
 
 // ============================================================

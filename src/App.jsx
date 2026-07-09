@@ -28,6 +28,7 @@ const RINGO_KM_URL     = url("Ringo_KM");
 const LAYOUTS_MONTHLY_URL   = url("Layouts_Monthly");
 const LAYOUTS_COVERAGE_URL  = url("Layouts_Coverage");
 const LAYOUTS_KM_URL        = url("Layouts_KM");
+const LAYOUTS_KM_MONTHLY_URL = url("Layouts_KM_Monthly");
 const LAYOUTS_BUILDINGS_URL = url("Layouts_Buildings_Missing");
 
 // ============================================================
@@ -1155,9 +1156,10 @@ function BuildingsMissingTable({ title, rows, defaultOpen = true }) {
   );
 }
 
-function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildings, loading }) {
+function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildings, kmMonthly, loading }) {
   const C = useContext(ThemeContext);
   const [monthsCount, setMonthsCount] = useState(6);
+  const [kmMonthsCount, setKmMonthsCount] = useState(6);
 
   if (loading) {
     return (
@@ -1177,9 +1179,15 @@ function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildin
 
   const kmTotal = km("km_total");
   const kmMissing = km("km_missing");
+  const kmNoPrice = km("km_no_price");
   const kmAdded = Math.max(kmTotal - kmMissing, 0);
   const kmPct = kmTotal > 0 ? Math.round((kmAdded / kmTotal) * 100) : 0;
   const kmColor = kmPct >= 75 ? C.green : kmPct >= 50 ? C.yellow : C.red;
+
+  const kmMonthData = kmMonthly.data.slice(-kmMonthsCount).map(r => ({
+    month: formatMonth(r[0]),
+    count: parseInt(r[1]) || 0,
+  }));
 
   const buildingsRows = layoutsBuildings.data.map(r => ({
     name: r[0] || "",
@@ -1245,7 +1253,12 @@ function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildin
 
       {/* ROW 4 — КМ типові проєкти */}
       <Card>
-        <Label>Типові проєкти КМ (планування додано)</Label>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <Label style={{ marginBottom: 0 }}>Типові проєкти КМ (планування додано)</Label>
+          <div style={{ fontSize: 12, fontFamily: "'Lun Mono', monospace", color: C.red, background: C === DARK ? "#2e150f" : "#fbe0da", padding: "3px 10px", borderRadius: 6 }}>
+            без цін: {kmNoPrice.toLocaleString("uk-UA")}
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6 }}>
           <PctRing value={kmPct} color={kmColor} size={88} />
           <div>
@@ -1260,6 +1273,44 @@ function LayoutsTab({ layoutsMonthly, layoutsCoverage, layoutsKM, layoutsBuildin
             </div>
           </div>
         </div>
+      </Card>
+
+      {/* ROW 5 — Нових ТП по місяцях */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <Label style={{ marginBottom: 0 }}>Нових типових проєктів КМ по місяцях</Label>
+          <FilterPills
+            value={kmMonthsCount}
+            onChange={setKmMonthsCount}
+            options={[
+              { label: "6 міс",  value: 6  },
+              { label: "12 міс", value: 12 },
+              { label: "24 міс", value: 24 },
+              { label: "всі",    value: 999 },
+            ]}
+          />
+        </div>
+        <div style={{ height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={kmMonthData} barCategoryGap="25%" margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 10, fontFamily: "'Lun Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString("uk-UA")} allowDecimals={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="count" name="Нових ТП" fill={C.accent} radius={[4,4,0,0]}>
+                {kmMonthData.length <= 14 && (
+                  <LabelList dataKey="count" position="top"
+                    style={{ fill: C.text, fontSize: 11, fontFamily: "'Lun Mono', monospace", fontWeight: 600 }}
+                    formatter={v => v.toLocaleString("uk-UA")} />
+                )}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        {kmMonthData.length > 14 && (
+          <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: "'Lun Mono', monospace" }}>
+            Значення — при наведенні на стовпчик
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -1368,6 +1419,7 @@ function Dashboard({ onLogout }) {
   const [layoutsCoverage, setLayoutsCoverage] = useState({});
   const [layoutsKM,       setLayoutsKM]       = useState({});
   const [layoutsBuildings, setLayoutsBuildings] = useState({ headers: [], data: [] });
+  const [kmMonthly, setKmMonthly] = useState({ headers: [], data: [] });
   const [layoutsLoaded,   setLayoutsLoaded]   = useState(false);
   const [layoutsLoading,  setLayoutsLoading]  = useState(false);
   const [layoutsError,    setLayoutsError]    = useState(null);
@@ -1477,14 +1529,15 @@ function Dashboard({ onLogout }) {
     setLayoutsLoading(true);
     setLayoutsError(null);
     try {
-      const [r1, r2, r3, r4] = await Promise.all([
-        fetch(LAYOUTS_MONTHLY_URL), fetch(LAYOUTS_COVERAGE_URL), fetch(LAYOUTS_KM_URL), fetch(LAYOUTS_BUILDINGS_URL),
+      const [r1, r2, r3, r4, r5] = await Promise.all([
+        fetch(LAYOUTS_MONTHLY_URL), fetch(LAYOUTS_COVERAGE_URL), fetch(LAYOUTS_KM_URL), fetch(LAYOUTS_BUILDINGS_URL), fetch(LAYOUTS_KM_MONTHLY_URL),
       ]);
-      const [j1, j2, j3, j4] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json()]);
+      const [j1, j2, j3, j4, j5] = await Promise.all([r1.json(), r2.json(), r3.json(), r4.json(), r5.json()]);
       setLayoutsMonthly(parseTable(j1.values));
       setLayoutsCoverage(parseKPI(j2.values));
       setLayoutsKM(parseKPI(j3.values));
       setLayoutsBuildings(parseTable(j4.values));
+      setKmMonthly(parseTable(j5.values));
       setLayoutsLoaded(true);
     } catch {
       setLayoutsError("Не вдалося завантажити дані по плануваннях.");
@@ -1628,7 +1681,7 @@ function Dashboard({ onLogout }) {
       <div style={{ padding: "24px 100px", position: "relative", zIndex: 1 }}>
         {activeTab === "Realbase"  && <FlatsTab kpi={kpi} regions={regions} highList={highList} />}
         {activeTab === "Фіди"      && <FeedsTab feedsKpi={feedsKpi} feedsDaily={feedsDaily} feedsByRegion={feedsByRegion} feedsByMonth={feedsByMonth} feedsRegionStats={feedsRegionStats} feedsByCompany={feedsByCompany} loading={feedsLoading} />}
-        {activeTab === "Layouts"   && <LayoutsTab layoutsMonthly={layoutsMonthly} layoutsCoverage={layoutsCoverage} layoutsKM={layoutsKM} layoutsBuildings={layoutsBuildings} loading={layoutsLoading} />}
+        {activeTab === "Layouts"   && <LayoutsTab layoutsMonthly={layoutsMonthly} layoutsCoverage={layoutsCoverage} layoutsKM={layoutsKM} layoutsBuildings={layoutsBuildings} kmMonthly={kmMonthly} loading={layoutsLoading} />}
         {activeTab === "Ringostat" && <RingostatTab ringoKpiAll={ringoKpiAll} ringoByRegionAll={ringoByRegionAll} ringoKmAll={ringoKmAll} loading={ringoLoading} />}
       </div>
     </div>
