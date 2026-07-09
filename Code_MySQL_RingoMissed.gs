@@ -92,10 +92,11 @@ function monthLabelToKey(uaLabel) {
 
 // ============================================================
 // 2. Ringo_Missed_By_Building_Monthly ("дошка позора")
-// Колонки: name | region | month | missed_calls
-// Пропущені дзвінки (call_status = NO ANSWER) по ЖК, по місяцях,
-// за останні 6 місяців (зменшено з 12 — важкий групування по ЖК×місяць
-// підвішувало запит; 6 міс безпечніше). Фільтр періоду (1/3/6 міс) — на дашборді.
+// Колонки: name | region | month | missed_calls | total_calls
+// Пропущені й всього дзвінків (для %) по ЖК, по місяцях, за останні
+// 12 місяців. ⚠️ Раніше було 6 міс через ризик підвисання запиту —
+// повернено на 12 за запитом; якщо знову висітиме довго, скажи,
+// зменшимо назад. Фільтр періоду (1/3/6/12 міс) — на дашборді.
 // Рахуємо напряму з MySQL, а не зі статусів "Пропущені рінго" —
 // тому щойно ЖК починає відповідати, воно природно зникає зі списку
 // в наступному місяці, без потреби вручну відстежувати статус "вже ок".
@@ -106,12 +107,12 @@ function writeMissedCallsWallOfShame(conn) {
       COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('ЖК #', b.building_id)) AS name,
       gr.nominative_uk AS region,
       DATE_FORMAT(rc.call_timestamp, '%Y-%m') AS month,
-      COUNT(*) AS missed_calls
+      SUM(CASE WHEN rc.call_status = 'NO ANSWER' THEN 1 ELSE 0 END) AS missed_calls,
+      COUNT(*) AS total_calls
     FROM b2b.ringo_call rc
     INNER JOIN buildings b ON rc.building_id = b.building_id
     LEFT JOIN geo_regions gr ON gr.region_id = b.region_id
-    WHERE rc.call_status = 'NO ANSWER'
-      AND rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 6 MONTH), '%Y-%m-01')
+    WHERE rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 12 MONTH), '%Y-%m-01')
     GROUP BY b.building_id, COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('ЖК #', b.building_id)), gr.nominative_uk, DATE_FORMAT(rc.call_timestamp, '%Y-%m')
     ORDER BY name, month
   `;
@@ -119,13 +120,14 @@ function writeMissedCallsWallOfShame(conn) {
   var stmt = conn.prepareStatement(sql);
   var rs = stmt.executeQuery();
 
-  var rows = [["name", "region", "month", "missed_calls"]];
+  var rows = [["name", "region", "month", "missed_calls", "total_calls"]];
   while (rs.next()) {
     rows.push([
       rs.getString("name"),
       rs.getString("region"),
       rs.getString("month"),
       rs.getInt("missed_calls"),
+      rs.getInt("total_calls"),
     ]);
   }
   rs.close(); stmt.close();
