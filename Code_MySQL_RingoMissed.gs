@@ -94,7 +94,8 @@ function monthLabelToKey(uaLabel) {
 // 2. Ringo_Missed_By_Building_Monthly ("дошка позора")
 // Колонки: name | region | month | missed_calls
 // Пропущені дзвінки (call_status = NO ANSWER) по ЖК, по місяцях,
-// за останні 12 місяців. Фільтр періоду (1/3/6/12 міс) — на дашборді.
+// за останні 6 місяців (зменшено з 12 — важкий групування по ЖК×місяць
+// підвішувало запит; 6 міс безпечніше). Фільтр періоду (1/3/6 міс) — на дашборді.
 // Рахуємо напряму з MySQL, а не зі статусів "Пропущені рінго" —
 // тому щойно ЖК починає відповідати, воно природно зникає зі списку
 // в наступному місяці, без потреби вручну відстежувати статус "вже ок".
@@ -110,7 +111,7 @@ function writeMissedCallsWallOfShame(conn) {
     INNER JOIN buildings b ON rc.building_id = b.building_id
     LEFT JOIN geo_regions gr ON gr.region_id = b.region_id
     WHERE rc.call_status = 'NO ANSWER'
-      AND rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 12 MONTH), '%Y-%m-01')
+      AND rc.call_timestamp >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 6 MONTH), '%Y-%m-01')
     GROUP BY b.building_id, b.name_uk, gr.nominative_uk, DATE_FORMAT(rc.call_timestamp, '%Y-%m')
     ORDER BY name, month
   `;

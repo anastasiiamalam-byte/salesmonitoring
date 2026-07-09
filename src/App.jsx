@@ -1087,7 +1087,6 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
               { label: "1 міс",  value: 1  },
               { label: "3 міс",  value: 3  },
               { label: "6 міс",  value: 6  },
-              { label: "12 міс", value: 12 },
             ]}
           />
         </div>
