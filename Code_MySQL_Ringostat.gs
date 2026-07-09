@@ -144,7 +144,7 @@ function writeRingoKM(conn) {
     SELECT
       DATE_FORMAT(rc.call_timestamp, '%Y-%m')                                AS month,
       b.building_id,
-      IFNULL(b.name_uk, CONCAT('КМ #', b.building_id))                      AS building_name,
+      COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('КМ #', b.building_id)) AS building_name,
       CASE
         WHEN gc.city_id = 1 THEN 'Київ'
         ELSE CONCAT(gr.nominative_uk, ' область')
@@ -160,7 +160,7 @@ function writeRingoKM(conn) {
     GROUP BY
       DATE_FORMAT(rc.call_timestamp, '%Y-%m'),
       b.building_id,
-      b.name_uk,
+      COALESCE(NULLIF(b.name_uk, ''), NULLIF(b.address_uk, ''), CONCAT('КМ #', b.building_id)),
       CASE WHEN gc.city_id = 1 THEN 'Київ' ELSE CONCAT(gr.nominative_uk, ' область') END
     ORDER BY month DESC, calls DESC
   `;
