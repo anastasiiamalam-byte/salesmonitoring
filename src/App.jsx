@@ -856,13 +856,14 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
     prev.total += parseInt(totalCnt) || 0;
     shameMap.set(name, prev);
   });
-  // 1 міс — від 6 пропущених; 3/6/12 міс — від 11 пропущених (менш "шумно" на довших періодах)
-  const shameThreshold = shameRange === 1 ? 5 : 10;
+  // Критерій "дошки позора": понад 80% пропущених дзвінків.
+  // Мінімум дзвінків за період — щоб один пропущений дзвінок при 1 всього не давав 100% "на порожньому місці".
+  const shameMinTotal = shameRange === 1 ? 5 : 10;
   const shameRows = [...shameMap.values()]
     .filter(r => r.missed <= r.total) // захист від битих даних з джерела (пропущено > всього)
     .map(r => ({ ...r, pct: r.total > 0 ? Math.round((r.missed / r.total) * 100) : 0 }))
-    .filter(r => r.missed > shameThreshold)
-    .sort((a, b) => b.missed - a.missed);
+    .filter(r => r.total >= shameMinTotal && r.pct > 80)
+    .sort((a, b) => b.pct - a.pct || b.missed - a.missed);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
@@ -1098,7 +1099,7 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
 
       {/* ROW 6 — Дошка позора: ЖК, що не беруть слухавку */}
       <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <div style={{ fontFamily: "'Lun Display', sans-serif", fontSize: 18, fontWeight: 700, color: C.text }}>Дошка позора — ЖК, що не беруть слухавку</div>
           <FilterPills
             value={shameRange}
@@ -1111,9 +1112,12 @@ function RingostatTab({ ringoKpiAll, ringoByRegionAll, ringoKmAll, ringoMissedSt
             ]}
           />
         </div>
+        <div style={{ fontSize: 12, color: C.muted, fontFamily: "'Lun Mono', monospace", marginBottom: 12 }}>
+          ЖК, де пропущено понад 80% дзвінків (від {shameMinTotal} дзвінків за період)
+        </div>
         {shameRows.length === 0 ? (
           <div style={{ padding: "20px", textAlign: "center", color: C.green, fontFamily: "'Lun Mono', monospace", fontSize: 13 }}>
-            ✓ Немає ЖК з пропущеними дзвінками понад порогом за цей період
+            ✓ Немає ЖК з понад 80% пропущених дзвінків за цей період
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
